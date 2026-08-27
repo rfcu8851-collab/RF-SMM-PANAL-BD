@@ -1,8 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+Ôªøimport React, { useState, useEffect, useRef } from 'react';
 import { Live3DCanvas, ThreeDTheme, THEME_CONFIGS } from './components/Live3DCanvas';
 import { Welcome3DModal } from './components/Welcome3DModal';
 import {
   db,
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
   doc,
   collection,
   onSnapshot,
@@ -74,6 +80,7 @@ interface UserSession {
   uid: string;
   username: string;
   name: string;
+  email?: string;
   photoURL?: string;
 }
 
@@ -787,6 +794,47 @@ export default function App() {
 
     const initApp = async () => {
       try {
+        // Check if returning from Google redirect
+        try {
+          const redirectRes = await getRedirectResult(auth);
+          if (redirectRes && redirectRes.user) {
+            const gUser = redirectRes.user;
+            const email = (gUser.email || '').toLowerCase().trim();
+            const displayName = gUser.displayName || (email ? email.split('@')[0] : 'Google User');
+            const photoURL = gUser.photoURL || '';
+            const googleUid = gUser.uid;
+
+            let userDoc: any = null;
+            let userData: any = null;
+            const qGoogle = query(collection(db, 'auth_users'), where('googleUid', '==', googleUid));
+            const snapGoogle = await getDocs(qGoogle);
+            if (!snapGoogle.empty) {
+              userDoc = snapGoogle.docs[0];
+              userData = userDoc.data();
+            } else if (email) {
+              const qEmail = query(collection(db, 'auth_users'), where('email', '==', email));
+              const snapEmail = await getDocs(qEmail);
+              if (!snapEmail.empty) {
+                userDoc = snapEmail.docs[0];
+                userData = userDoc.data();
+              }
+            }
+
+            if (userDoc && userData) {
+              const session: UserSession = {
+                uid: userDoc.id,
+                username: userData.username,
+                name: userData.name,
+                email,
+                photoURL
+              };
+              currentUserSessionLogin(session);
+            }
+          }
+        } catch (redirErr) {
+          console.warn('Redirect check notice:', redirErr);
+        }
+
         const saved = localStorage.getItem('smm_session');
         if (saved) {
           const session = JSON.parse(saved);
@@ -2349,30 +2397,96 @@ export default function App() {
     }
   };
 
-  // Telegram Login
-  const loginWithTelegram = async () => {
-    if (!tg?.initDataUnsafe?.user) {
-      showToast('Open this app inside Telegram to auto-connect', 'warning');
-      return;
-    }
+  // Google / Gmail Auto 1-Click Login
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const loginWithGoogle = async () => {
+    if (googleLoading || authSubmitting) return;
+    setGoogleLoading(true);
     haptic('heavy');
-    const tgUser = tg.initDataUnsafe.user;
-    const username = (tgUser.username || `tg_${tgUser.id}`).toLowerCase().replace(/[^a-z0-9_]/g, '');
-    const name = tgUser.first_name || 'Telegram User';
-
     try {
-      const q = query(collection(db, 'auth_users'), where('telegramId', '==', tgUser.id));
-      const snap = await getDocs(q);
+      let result = null;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: any) {
+        console.warn('Popup sign in failed, trying redirect:', popupErr);
+        if (
+          popupErr?.code === 'auth/popup-blocked' ||
+          popupErr?.code === 'auth/popup-closed-by-user' ||
+          popupErr?.code === 'auth/cancelled-popup-request'
+        ) {
+          try {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          } catch (rErr) {
+            console.error('Redirect err:', rErr);
+          }
+        }
+        throw popupErr;
+      }
 
-      if (!snap.empty) {
-        const userDoc = snap.docs[0];
-        const userData = userDoc.data();
-        const session = { uid: userDoc.id, username: userData.username, name: userData.name };
+      if (!result || !result.user) {
+        setGoogleLoading(false);
+        return;
+      }
+
+      const gUser = result.user;
+      const email = (gUser.email || '').toLowerCase().trim();
+      const displayName = gUser.displayName || (email ? email.split('@')[0] : 'Google User');
+      const photoURL = gUser.photoURL || '';
+      const googleUid = gUser.uid;
+
+      // Base username from email or display name
+      let baseUsername = (email ? email.split('@')[0] : displayName)
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '');
+      if (baseUsername.length < 3) baseUsername = `user_${googleUid.slice(0, 6).toLowerCase()}`;
+
+      // Check existing user in auth_users
+      let userDoc: any = null;
+      let userData: any = null;
+
+      // Check by googleUid
+      const qGoogle = query(collection(db, 'auth_users'), where('googleUid', '==', googleUid));
+      const snapGoogle = await getDocs(qGoogle);
+      if (!snapGoogle.empty) {
+        userDoc = snapGoogle.docs[0];
+        userData = userDoc.data();
+      } else if (email) {
+        // Check by email
+        const qEmail = query(collection(db, 'auth_users'), where('email', '==', email));
+        const snapEmail = await getDocs(qEmail);
+        if (!snapEmail.empty) {
+          userDoc = snapEmail.docs[0];
+          userData = userDoc.data();
+          await updateDoc(doc(db, 'auth_users', userDoc.id), {
+            googleUid,
+            photoURL: photoURL || userData.photoURL || '',
+            authProvider: 'google'
+          });
+        }
+      }
+
+      if (userDoc && userData) {
+        // Existing user found
+        const session: UserSession = {
+          uid: userDoc.id,
+          username: userData.username || baseUsername,
+          name: userData.name || displayName,
+          email,
+          photoURL: photoURL || userData.photoURL || ''
+        };
         currentUserSessionLogin(session);
-        showToast(`Welcome, ${userData.name}!`, 'success');
+        showToast(`‡¶∏‡ßç‡¶¨‡¶æ‡¶ó‡¶§‡¶Æ, ${session.name}! üéâ`, 'success');
       } else {
-        const finalUsername =
-          username.length >= 3 ? username : `tg_${String(tgUser.id).slice(-6)}`;
+        // New user auto-registration
+        let finalUsername = baseUsername;
+        const qCheck = query(collection(db, 'auth_users'), where('username', '==', finalUsername));
+        const snapCheck = await getDocs(qCheck);
+        if (!snapCheck.empty) {
+          finalUsername = `${baseUsername}_${Math.floor(100 + Math.random() * 900)}`;
+        }
+
         const newDoc = doc(collection(db, 'auth_users'));
         const uid = newDoc.id;
 
@@ -2389,16 +2503,19 @@ export default function App() {
               referrerUsername = refSnap.docs[0].data().username || refInput;
             }
           } catch (rErr) {
-            console.error('TG Referral lookup error:', rErr);
+            console.error('Google Referral lookup error:', rErr);
           }
         }
 
         await setDoc(newDoc, {
           username: finalUsername,
-          name,
+          name: displayName,
+          email,
+          photoURL,
+          googleUid,
           password: '',
+          authProvider: 'google',
           createdAt: serverTimestamp(),
-          telegramId: tgUser.id,
           referredBy: referrerUid,
           referredByUsername: referrerUsername
         });
@@ -2406,8 +2523,10 @@ export default function App() {
         await setDoc(
           doc(db, 'users', uid),
           {
-            name,
+            name: displayName,
             username: finalUsername,
+            email,
+            photoURL,
             balance: 0,
             total_orders: 0,
             totalReferrals: 0,
@@ -2428,18 +2547,41 @@ export default function App() {
               await updateDoc(refUserRef, {
                 totalReferrals: currentTotalRefs + 1
               });
+
+              await addDoc(collection(db, 'user_notifications'), {
+                uid: referrerUid,
+                title: 'üë• ‡¶®‡¶§‡ßÅ‡¶® ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶Æ‡ßá‡¶Æ‡ßç‡¶¨‡¶æ‡¶∞ ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßá‡¶õ‡ßá!',
+                message: `@${finalUsername} (${displayName}) ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï‡ßá‡¶∞ ‡¶Æ‡¶æ‡¶ß‡ßç‡¶Ø‡¶Æ‡ßá Gmail ‡¶¶‡¶ø‡ßü‡ßá ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßá‡¶õ‡ßá! ‡ß´% ‡¶≤‡¶æ‡¶á‡¶´‡¶ü‡¶æ‡¶á‡¶Æ ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶â‡¶™‡¶≠‡ßã‡¶ó ‡¶ï‡¶∞‡ßÅ‡¶®‡•§`,
+                type: 'promo',
+                timestamp: serverTimestamp(),
+                unread: true
+              });
             }
           } catch (e) {}
         }
 
-        const session = { uid, username: finalUsername, name };
+        const session: UserSession = {
+          uid,
+          username: finalUsername,
+          name: displayName,
+          email,
+          photoURL
+        };
         currentUserSessionLogin(session);
-        showToast('Telegram account connected!', 'success');
+        showToast('Gmail ‡¶¶‡¶ø‡ßü‡ßá ‡¶∏‡¶´‡¶≤‡¶≠‡¶æ‡¶¨‡ßá ‡¶Ö‡ßç‡¶Ø‡¶æ‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶ö‡¶æ‡¶≤‡ßÅ ‡¶π‡ßü‡ßá‡¶õ‡ßá! üöÄ', 'success');
       }
-    } catch (e) {
-      console.error('TG Login error:', e);
+    } catch (e: any) {
+      console.error('Google Login error:', e);
       haptic('error');
-      showToast('Failed to connect with Telegram', 'error');
+      if (e?.code === 'auth/popup-closed-by-user') {
+        showToast('Google ‡¶≤‡¶ó‡¶á‡¶® ‡¶â‡¶á‡¶®‡ßç‡¶°‡ßã ‡¶¨‡¶®‡ßç‡¶ß ‡¶ï‡¶∞‡¶æ ‡¶π‡ßü‡ßá‡¶õ‡ßá', 'warning');
+      } else if (e?.code === 'auth/network-request-failed') {
+        showToast('‡¶á‡¶®‡ßç‡¶ü‡¶æ‡¶∞‡¶®‡ßá‡¶ü ‡¶∏‡¶Ç‡¶Ø‡ßã‡¶ó ‡¶ö‡ßá‡¶ï ‡¶ï‡¶∞‡ßÅ‡¶®', 'error');
+      } else {
+        showToast('Google ‡¶∏‡¶æ‡¶á‡¶® ‡¶á‡¶® ‡¶¨‡ßç‡¶Ø‡¶∞‡ßç‡¶• ‡¶π‡ßü‡ßá‡¶õ‡ßá‡•§ ‡¶Ü‡¶¨‡¶æ‡¶∞ ‡¶ö‡ßá‡¶∑‡ßç‡¶ü‡¶æ ‡¶ï‡¶∞‡ßÅ‡¶®‡•§', 'error');
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -2456,7 +2598,10 @@ export default function App() {
       show: true,
       title: 'Logout',
       bodyHtml: <p className="text-slate-300 text-sm">Are you sure you want to logout?</p>,
-      onConfirm: () => {
+      onConfirm: async () => {
+        try {
+          await signOut(auth);
+        } catch (_) {}
         localStorage.removeItem('smm_session');
         setIsLoggedIn(false);
         setCurrentUser(null);
@@ -3381,13 +3526,79 @@ export default function App() {
                   )}
                 </button>
                 <div className="auth-divider">OR</div>
-                <button className="auth-tg-btn" onClick={loginWithTelegram}>
-                  <i className="fab fa-telegram text-[#2AABEE] text-lg"></i>
-                  <span>Continue with Telegram</span>
+                <button
+                  type="button"
+                  className="auth-google-btn"
+                  onClick={loginWithGoogle}
+                  disabled={googleLoading || authSubmitting}
+                >
+                  {googleLoading ? (
+                    <span className="loading-spinner"></span>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <span className="text-white font-extrabold tracking-wide">Sign in with Google</span>
+                    </>
+                  )}
                 </button>
               </div>
             ) : (
               <div>
+                {/* 1-Click Fast Google Sign Up */}
+                <button
+                  type="button"
+                  className="auth-google-btn mb-4 shadow-[0_0_20px_rgba(66,133,244,0.25)] border-blue-500/40 hover:border-blue-400 bg-gradient-to-r from-blue-950/40 via-slate-900/60 to-indigo-950/40"
+                  onClick={loginWithGoogle}
+                  disabled={googleLoading || authSubmitting}
+                >
+                  {googleLoading ? (
+                    <span className="loading-spinner"></span>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <span className="text-white font-extrabold tracking-wide text-sm">
+                        Sign Up with Google
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                <div className="auth-divider mb-4">OR REGISTER WITH FORM</div>
+
                 <div className="mb-3">
                   <label className="form-label">Full Name</label>
                   <input
@@ -3472,9 +3683,37 @@ export default function App() {
                   )}
                 </button>
                 <div className="auth-divider">OR</div>
-                <button className="auth-tg-btn" onClick={loginWithTelegram}>
-                  <i className="fab fa-telegram text-[#2AABEE] text-lg"></i>
-                  <span>Sign Up with Telegram</span>
+                <button
+                  type="button"
+                  className="auth-google-btn"
+                  onClick={loginWithGoogle}
+                  disabled={googleLoading || authSubmitting}
+                >
+                  {googleLoading ? (
+                    <span className="loading-spinner"></span>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <span className="text-white font-extrabold tracking-wide">Sign Up with Google</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -9453,1187 +9692,13 @@ export default function App() {
               <div className="bg-[#0b1329] border border-amber-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(245,158,11,0.25)] w-full max-w-lg mx-auto">
                 {/* Modal Header */}
                 <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/80">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
-                      <i className="fas fa-bell text-xs"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <span>Notifications</span>
-                        {unreadNotifCount > 0 && (
-                          <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.2 rounded-full">
-                            {unreadNotifCount} new
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-[9px] text-slate-400">Updates, deposit statuses & announcements</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {unreadNotifCount > 0 && (
-                      <button
-                        onClick={markAllNotifsRead}
-                        className="text-[9px] font-bold text-amber-400 hover:underline bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20"
-                      >
-                        Read All
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setShowNotifModal(false)}
-                      className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                    >
-                      <i className="fas fa-times text-xs"></i>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Notifications List */}
-                <div className="p-4 overflow-y-auto max-h-[60vh] space-y-2.5">
-                  {notifications.length === 0 ? (
-                    <div className="text-center py-10">
-                      <i className="fas fa-bell-slash text-3xl text-slate-600 mb-2"></i>
-                      <p className="text-xs text-slate-400 font-bold">No notifications yet</p>
-                    </div>
-                  ) : (
-                    notifications.map((notif) => {
-                      let iconClass = 'fas fa-info-circle text-blue-400 bg-blue-500/20';
-                      if (notif.type === 'deposit') iconClass = 'fas fa-wallet text-emerald-400 bg-emerald-500/20';
-                      if (notif.type === 'order') iconClass = 'fas fa-rocket text-indigo-400 bg-indigo-500/20';
-                      if (notif.type === 'promo') iconClass = 'fas fa-gift text-pink-400 bg-pink-500/20';
-
-                      return (
-                        <div
-                          key={notif.id}
-                          onClick={() => {
-                            setNotifications((prev) =>
-                              prev.map((n) => (n.id === notif.id ? { ...n, unread: false } : n))
-                            );
-                          }}
-                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-                            notif.unread
-                              ? 'bg-slate-900/90 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
-                              : 'bg-slate-900/40 border-white/5 opacity-80'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs flex-shrink-0 ${iconClass}`}>
-                              <i className={iconClass.split(' ')[0] + ' ' + iconClass.split(' ')[1]}></i>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between mb-1">
-                                <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5">
-                                  {notif.title}
-                                  {notif.unread && (
-                                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                                  )}
-                                </h4>
-                                <span className="text-[9px] text-slate-500 font-mono">{notif.time}</span>
-                              </div>
-                              <p className="text-[11px] text-slate-300 leading-relaxed">{notif.message}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MAILBOX MODAL */}
-          {showMailboxModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#0b1329] border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.25)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/80">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                      <i className="fas fa-envelope text-xs"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <span>Mail Box (‡¶Æ‡ßá‡¶á‡¶≤ ‡¶¨‡¶ï‡ßç‡¶∏)</span>
-                        {unreadMailCount > 0 && (
-                          <span className="bg-blue-500 text-white text-[9px] font-black px-2 py-0.2 rounded-full">
-                            {unreadMailCount}
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-[9px] text-slate-400">Support tickets & admin announcements</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setShowMailboxModal(false)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex border-b border-white/10 bg-slate-900/50">
-                  <button
-                    onClick={() => setMailboxTab('inbox')}
-                    className={`flex-1 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
-                      mailboxTab === 'inbox'
-                        ? 'text-emerald-400 border-b-2 border-emerald-400 bg-emerald-500/10'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <i className="fas fa-inbox"></i>
-                    <span>Inbox ({mailList.length})</span>
-                  </button>
-                  <button
-                    onClick={() => setMailboxTab('compose')}
-                    className={`flex-1 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
-                      mailboxTab === 'compose'
-                        ? 'text-emerald-400 border-b-2 border-emerald-400 bg-emerald-500/10'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <i className="fas fa-paper-plane"></i>
-                    <span>Send Mail (‡¶Æ‡ßá‡¶∏‡ßá‡¶ú ‡¶™‡¶æ‡¶†‡¶æ‡¶®)</span>
-                  </button>
-                </div>
-
-                {/* Tab Content */}
-                <div className="p-4 overflow-y-auto max-h-[60vh]">
-                  {mailboxTab === 'inbox' ? (
-                    <div className="space-y-2.5">
-                      {mailList.length === 0 ? (
-                        <div className="text-center py-10">
-                          <i className="fas fa-mail-bulk text-3xl text-slate-600 mb-2"></i>
-                          <p className="text-xs text-slate-400 font-bold">Your mailbox is empty</p>
-                        </div>
-                      ) : (
-                        mailList.map((mail) => (
-                          <div
-                            key={mail.id}
-                            onClick={() => markMailRead(mail.id)}
-                            className={`p-3.5 rounded-2xl border transition-all ${
-                              mail.unread
-                                ? 'bg-slate-900/90 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                                : 'bg-slate-900/40 border-white/5'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1.5">
-                              <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">
-                                  <i className="fas fa-user-shield"></i>
-                                </span>
-                                <span className="text-xs font-extrabold text-white">{mail.sender}</span>
-                              </div>
-                              <span className="text-[9px] text-slate-500 font-mono">{mail.time}</span>
-                            </div>
-
-                            <h4 className="font-extrabold text-xs text-emerald-300 mb-1">{mail.subject}</h4>
-                            <p className="text-[11px] text-slate-300 leading-relaxed bg-black/20 p-2.5 rounded-xl border border-white/5">
-                              {mail.message}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  ) : (
-                    /* Compose Form */
-                    <div className="space-y-3.5">
-                      <div>
-                        <label className="form-label">Subject (‡¶¨‡¶ø‡¶∑‡¶Ø‡¶º)</label>
-                        <input
-                          type="text"
-                          className="input-modern text-xs"
-                          placeholder="e.g. Need assistance with Order #1024 or Deposit"
-                          value={mailSubject}
-                          onChange={(e) => setMailSubject(e.target.value)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="form-label">Message Details (‡¶Æ‡ßá‡¶∏‡ßá‡¶ú)</label>
-                        <textarea
-                          rows={4}
-                          className="input-modern text-xs resize-none"
-                          placeholder="Write your message or inquiry here..."
-                          value={mailMessage}
-                          onChange={(e) => setMailMessage(e.target.value)}
-                        />
-                      </div>
-
-                      <button
-                        onClick={handleSendMail}
-                        disabled={mailSubmitting}
-                        className="btn-primary-solid flex items-center justify-center gap-2 w-full py-3"
-                      >
-                        {mailSubmitting ? (
-                          <span className="loading-spinner"></span>
-                        ) : (
-                          <>
-                            <i className="fas fa-paper-plane text-xs"></i>
-                            <span>SEND MAIL TO SUPPORT (‡¶Æ‡ßá‡¶á‡¶≤ ‡¶™‡¶æ‡¶†‡¶æ‡¶®)</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* REFERRAL PROGRAM MODAL */}
-          {showReferralModal && (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#080d1a] border border-amber-500/40 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_60px_rgba(245,158,11,0.3)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-amber-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-amber-950/40 to-slate-900">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/25 border border-amber-500/40 flex items-center justify-center text-amber-300 shadow-inner">
-                      <i className="fas fa-hand-holding-dollar text-base animate-bounce"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <span>Referral Program (‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶™‡ßç‡¶∞‡ßã‡¶ó‡ßç‡¶∞‡¶æ‡¶Æ)</span>
-                        <span className="bg-emerald-500 text-black text-[9px] font-black px-2 py-0.5 rounded-full">
-                          {referralConfig.bonusPercent || 10}% BONUS
-                        </span>
-                      </h3>
-                      <p className="text-[10px] text-amber-200/80">‡¶Ø‡ßá‡¶ï‡ßã‡¶®‡ßã ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü‡ßá {referralConfig.bonusPercent || 10}% ‡¶Ö‡¶ü‡ßã‡¶Æ‡ßá‡¶ü‡¶ø‡¶ï ‡¶ï‡ßç‡¶Ø‡¶æ‡¶∂ ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶®</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowReferralModal(false);
-                      haptic('light');
-                    }}
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-90"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                {/* Modal Scrollable Body */}
-                <div className="p-4 overflow-y-auto space-y-4 text-xs">
-                  {/* Hero Metric Cards (3-Grid) */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-gradient-to-br from-slate-900 to-amber-950/40 border border-amber-500/30 p-3 rounded-2xl text-center shadow">
-                      <span className="text-[10px] text-slate-400 font-bold block mb-1">‡¶Æ‡ßã‡¶ü ‡¶∞‡ßá‡¶´‡¶æ‡¶∞</span>
-                      <span className="text-base font-black text-amber-300 font-mono">
-                        {userTotalReferrals} <span className="text-[10px] text-slate-400">‡¶ú‡¶®</span>
-                      </span>
-                    </div>
-                    <div className="bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-500/30 p-3 rounded-2xl text-center shadow">
-                      <span className="text-[10px] text-slate-400 font-bold block mb-1">‡¶Æ‡ßã‡¶ü ‡¶¨‡ßã‡¶®‡¶æ‡¶∏</span>
-                      <span className="text-base font-black text-emerald-400 font-mono">
-                        ‡ß≥{userReferralEarnings.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="bg-gradient-to-br from-slate-900 to-cyan-950/40 border border-cyan-500/30 p-3 rounded-2xl text-center shadow">
-                      <span className="text-[10px] text-slate-400 font-bold block mb-1">‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶∞‡ßá‡¶ü</span>
-                      <span className="text-base font-black text-cyan-300 font-mono">
-                        {referralConfig.bonusPercent || 10}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Referral Link Card */}
-                  {(() => {
-                    const userRefCode = currentUser?.username || currentUser?.uid || '';
-                    const siteBase = (referralConfig.websiteUrl && referralConfig.websiteUrl.trim())
-                      ? referralConfig.websiteUrl.trim().replace(/\/+$/, '')
-                      : window.location.origin;
-                    const fullReferralUrl = `${siteBase}?ref=${encodeURIComponent(userRefCode)}`;
-
-                    return (
-                      <div className="glass-card p-4 rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-500/10 via-slate-900/90 to-slate-950 space-y-3 shadow-lg">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-extrabold text-amber-300 flex items-center gap-1.5">
-                            <i className="fas fa-link"></i>
-                            <span>‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶á‡¶â‡¶®‡¶ø‡¶ï ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï (Share & Earn)</span>
-                          </label>
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md font-bold">
-                            Live URL
-                          </span>
-                        </div>
-
-                        {/* Readonly Link Input */}
-                        <div className="flex items-center gap-2 bg-black/60 p-2 rounded-xl border border-white/10">
-                          <input
-                            type="text"
-                            readOnly
-                            value={fullReferralUrl}
-                            className="bg-transparent text-white font-mono text-[11px] flex-1 outline-none truncate select-all"
-                          />
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(fullReferralUrl);
-                              showToast('‚úÖ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶ï‡¶™‡¶ø ‡¶π‡ßü‡ßá‡¶õ‡ßá!', 'success');
-                              haptic('success');
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs shadow transition active:scale-95 flex items-center gap-1 shrink-0"
-                          >
-                            <i className="fas fa-copy"></i>
-                            <span>‡¶ï‡¶™‡¶ø</span>
-                          </button>
-                        </div>
-
-                        {/* Direct Social Share Buttons */}
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-bold block mb-2">‡¶∏‡ßã‡¶∂‡ßç‡¶Ø‡¶æ‡¶≤ ‡¶Æ‡¶ø‡¶°‡¶ø‡ßü‡¶æ‡ßü ‡¶∂‡ßá‡ßü‡¶æ‡¶∞ ‡¶ï‡¶∞‡ßÅ‡¶®:</span>
-                          <div className="grid grid-cols-4 gap-2">
-                            {/* Telegram */}
-                            <a
-                              href={`https://t.me/share/url?url=${encodeURIComponent(fullReferralUrl)}&text=${encodeURIComponent(`üî• ‡¶∏‡ßá‡¶∞‡¶æ ‡¶∏‡ßã‡¶∂‡ßç‡¶Ø‡¶æ‡¶≤ ‡¶Æ‡¶ø‡¶°‡¶ø‡¶Ø‡¶º‡¶æ ‡¶Æ‡¶æ‡¶∞‡ßç‡¶ï‡ßá‡¶ü‡¶ø‡¶Ç ‡¶∏‡¶æ‡¶∞‡ßç‡¶≠‡¶ø‡¶∏ ‡¶è‡¶¨‡¶Ç ‡¶á‡¶®‡¶∏‡ßç‡¶ü‡ßç‡¶Ø‡¶æ‡¶®‡ßç‡¶ü ‡¶¨‡ßã‡¶®‡¶æ‡¶∏ ‡¶™‡¶æ‡¶®: `)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => haptic('light')}
-                              className="py-2 px-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
-                            >
-                              <i className="fab fa-telegram text-base text-blue-400"></i>
-                              <span>Telegram</span>
-                            </a>
-
-                            {/* WhatsApp */}
-                            <a
-                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`üî• ‡¶∏‡ßá‡¶∞‡¶æ ‡¶∏‡ßã‡¶∂‡ßç‡¶Ø‡¶æ‡¶≤ ‡¶Æ‡¶ø‡¶°‡¶ø‡¶Ø‡¶º‡¶æ ‡¶Æ‡¶æ‡¶∞‡ßç‡¶ï‡ßá‡¶ü‡¶ø‡¶Ç ‡¶∏‡¶æ‡¶∞‡ßç‡¶≠‡¶ø‡¶∏ ‡¶è‡¶¨‡¶Ç ‡¶á‡¶®‡¶∏‡ßç‡¶ü‡ßç‡¶Ø‡¶æ‡¶®‡ßç‡¶ü ‡¶¨‡ßã‡¶®‡¶æ‡¶∏ ‡¶™‡ßá‡¶§‡ßá ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßÅ‡¶®: ${fullReferralUrl}`)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => haptic('light')}
-                              className="py-2 px-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
-                            >
-                              <i className="fab fa-whatsapp text-base text-emerald-400"></i>
-                              <span>WhatsApp</span>
-                            </a>
-
-                            {/* Facebook */}
-                            <a
-                              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(fullReferralUrl)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => haptic('light')}
-                              className="py-2 px-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
-                            >
-                              <i className="fab fa-facebook text-base text-indigo-400"></i>
-                              <span>Facebook</span>
-                            </a>
-
-                            {/* Native Web Share */}
-                            <button
-                              onClick={() => {
-                                if (navigator.share) {
-                                  navigator.share({
-                                    title: 'RF SMM Panel',
-                                    text: `‡¶Ü‡¶Æ‡¶æ‡¶∞ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï‡ßá ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßá ‡¶™‡¶æ‡¶® ${referralConfig.bonusPercent || 10}% ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶¨‡ßã‡¶®‡¶æ‡¶∏!`,
-                                    url: fullReferralUrl,
-                                  }).catch(() => {});
-                                } else {
-                                  navigator.clipboard.writeText(fullReferralUrl);
-                                  showToast('‚úÖ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶ï‡¶™‡¶ø ‡¶π‡ßü‡ßá‡¶õ‡ßá!', 'success');
-                                }
-                                haptic('light');
-                              }}
-                              className="py-2 px-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
-                            >
-                              <i className="fas fa-share-nodes text-base text-purple-400"></i>
-                              <span>Share</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Referral Code Box */}
-                        <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-                          <div>
-                            <span className="text-[10px] text-slate-400 font-bold block">‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶ï‡ßã‡¶°:</span>
-                            <span className="font-mono font-black text-sm text-white">{userRefCode}</span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(userRefCode);
-                              showToast(`‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶ï‡ßã‡¶° "${userRefCode}" ‡¶ï‡¶™‡¶ø ‡¶π‡ßü‡ßá‡¶õ‡ßá!`, 'success');
-                              haptic('success');
-                            }}
-                            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-300 text-[10px] font-bold rounded-lg transition active:scale-95"
-                          >
-                            <i className="fas fa-copy mr-1"></i> ‡¶ï‡ßã‡¶° ‡¶ï‡¶™‡¶ø
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* How It Works (‡¶∏‡¶π‡¶ú ‡ß©‡¶ü‡¶ø ‡¶®‡¶ø‡ßü‡¶Æ) */}
-                  <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-white/10 space-y-2.5">
-                    <h4 className="font-black text-xs text-white flex items-center gap-1.5">
-                      <i className="fas fa-circle-question text-amber-400"></i>
-                      <span>‡¶ï‡ßÄ‡¶≠‡¶æ‡¶¨‡ßá {referralConfig.bonusPercent || 10}% ‡¶¨‡ßã‡¶®‡¶æ‡¶∏ ‡¶™‡¶æ‡¶¨‡ßá‡¶®?</span>
-                    </h4>
-                    <div className="space-y-2 text-[11px] text-slate-300">
-                      <div className="flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                          ‡ßß
-                        </span>
-                        <p>
-                          <strong className="text-white">‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶¨‡¶æ ‡¶ï‡ßã‡¶° ‡¶∂‡ßá‡ßü‡¶æ‡¶∞ ‡¶ï‡¶∞‡ßÅ‡¶®:</strong> ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶á‡¶â‡¶®‡¶ø‡¶ï ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶ï‡¶™‡¶ø ‡¶ï‡¶∞‡ßá ‡¶¨‡¶®‡ßç‡¶ß‡ßÅ‡¶¶‡ßá‡¶∞ ‡¶´‡ßá‡¶∏‡¶¨‡ßÅ‡¶ï, ‡¶Æ‡ßá‡¶∏‡ßá‡¶û‡ßç‡¶ú‡¶æ‡¶∞ ‡¶¨‡¶æ ‡¶ü‡ßá‡¶≤‡¶ø‡¶ó‡ßç‡¶∞‡¶æ‡¶Æ‡ßá ‡¶™‡¶æ‡¶†‡¶æ‡¶®‡•§
-                        </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                          ‡ß®
-                        </span>
-                        <p>
-                          <strong className="text-white">‡¶¨‡¶®‡ßç‡¶ß‡ßÅ ‡¶∏‡¶æ‡¶á‡¶®‡¶Ü‡¶™ ‡¶ì ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶ï‡¶∞‡¶¨‡ßá:</strong> ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶¶‡¶ø‡ßü‡ßá ‡¶¨‡¶®‡ßç‡¶ß‡ßÅ ‡¶è‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶ñ‡ßÅ‡¶≤‡ßá ‡¶¨‡¶ø‡¶ï‡¶æ‡¶∂, ‡¶®‡¶ó‡¶¶ ‡¶¨‡¶æ ‡¶∞‡¶ï‡ßá‡¶ü‡ßá ‡¶Ø‡ßá‡¶ï‡ßã‡¶®‡ßã ‡¶™‡¶∞‡¶ø‡¶Æ‡¶æ‡¶£ ‡¶ü‡¶æ‡¶ï‡¶æ ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶ï‡¶∞‡¶¨‡ßá‡•§
-                        </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
-                          ‡ß©
-                        </span>
-                        <p>
-                          <strong className="text-white">‡¶á‡¶®‡¶∏‡ßç‡¶ü‡ßç‡¶Ø‡¶æ‡¶®‡ßç‡¶ü {referralConfig.bonusPercent || 10}% ‡¶ï‡ßç‡¶Ø‡¶æ‡¶∂ ‡¶¨‡ßã‡¶®‡¶æ‡¶∏:</strong> ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶è‡¶™‡ßç‡¶∞‡ßÅ‡¶≠ ‡¶π‡¶ì‡ßü‡¶æ‡¶∞ ‡¶∏‡¶æ‡¶•‡ßá ‡¶∏‡¶æ‡¶•‡ßá ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶è‡¶Æ‡¶æ‡¶â‡¶®‡ßç‡¶ü‡ßá‡¶∞ {referralConfig.bonusPercent || 10}% ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶Ö‡¶ü‡ßã‡¶Æ‡ßá‡¶ü‡¶ø‡¶ï ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶Æ‡ßá‡¶á‡¶® ‡¶¨‡ßç‡¶Ø‡¶æ‡¶≤‡ßá‡¶®‡ßç‡¶∏‡ßá ‡¶Ø‡ßã‡¶ó ‡¶π‡ßü‡ßá ‡¶Ø‡¶æ‡¶¨‡ßá!
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Realtime User Commission Logs */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-black text-xs text-white flex items-center gap-1.5">
-                        <i className="fas fa-clock-rotate-left text-cyan-400"></i>
-                        <span>‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶Ö‡¶∞‡ßç‡¶ú‡¶ø‡¶§ ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶π‡¶ø‡¶∏‡ßç‡¶ü‡ßç‡¶∞‡¶ø ({userReferralCommissions.length})</span>
-                      </h4>
-                      <span className="text-[10px] text-slate-400">Realtime Sync ‚ö°</span>
-                    </div>
-
-                    {userReferralCommissions.length === 0 ? (
-                      <div className="text-center py-6 px-4 rounded-2xl bg-slate-900/40 border border-dashed border-white/10 space-y-2">
-                        <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto text-base">
-                          <i className="fas fa-gift"></i>
-                        </div>
-                        <p className="text-xs font-bold text-slate-300">‡¶è‡¶ñ‡¶®‡ßã ‡¶ï‡ßã‡¶®‡ßã ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶¨‡ßã‡¶®‡¶æ‡¶∏ ‡¶ú‡¶Æ‡¶æ ‡¶π‡ßü‡¶®‡¶ø</p>
-                        <p className="text-[10px] text-slate-500 max-w-xs mx-auto">
-                          ‡¶â‡¶™‡¶∞‡ßá ‡¶•‡¶æ‡¶ï‡¶æ ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï ‡¶¨‡¶®‡ßç‡¶ß‡ßÅ‡¶¶‡ßá‡¶∞ ‡¶∂‡ßá‡ßü‡¶æ‡¶∞ ‡¶ï‡¶∞‡ßÅ‡¶® ‡¶è‡¶¨‡¶Ç ‡¶™‡ßç‡¶∞‡¶§‡¶ø‡¶ü‡¶ø ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü‡ßá {referralConfig.bonusPercent || 10}% ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶Ü‡ßü ‡¶ï‡¶∞‡ßÅ‡¶®!
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {userReferralCommissions.map((comm) => (
-                          <div
-                            key={comm.id}
-                            className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 shadow"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-                                ‡ß≥
-                              </div>
-                              <div>
-                                <span className="font-extrabold text-xs text-white block">
-                                  {comm.referredUsername || 'Referred Friend'}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü: ‡ß≥{comm.depositAmount} ({comm.bonusPercent || 10}% ‡¶¨‡ßã‡¶®‡¶æ‡¶∏)
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-xs font-black text-emerald-400 font-mono block">
-                                +‡ß≥{(comm.commissionAmount || 0).toFixed(2)}
-                              </span>
-                              <span className="text-[9px] text-slate-500 font-mono">
-                                {comm.timestamp?.seconds
-                                  ? new Date(comm.timestamp.seconds * 1000).toLocaleDateString('en-BD', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })
-                                  : 'Recently'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="p-3 border-t border-white/10 bg-slate-950 flex justify-end">
-                  <button
-                    onClick={() => {
-                      setShowReferralModal(false);
-                      haptic('light');
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition active:scale-95"
-                  >
-                    ‡¶¨‡¶®‡ßç‡¶ß ‡¶ï‡¶∞‡ßÅ‡¶® (Close)
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {showLiveOrdersModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#080d1a] border border-red-500/30 rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.25)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/90">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400">
-                      <i className="fas fa-satellite-dish text-xs animate-pulse"></i>
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <span>Live Orders Stream (‡¶≤‡¶æ‡¶á‡¶≠ ‡¶Ö‡¶∞‡ßç‡¶°‡¶æ‡¶∞)</span>
-                        <span className="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">
-                          LIVE ‚ö°
-                        </span>
-                      </h3>
-                      <p className="text-[9px] text-slate-400">Real-time order feed & status monitor</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setShowLiveOrdersModal(false)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                {/* Filter Tabs */}
-                <div className="flex border-b border-white/10 bg-slate-900/50">
-                  <button
-                    onClick={() => setLiveOrdersFilter('all')}
-                    className={`flex-1 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
-                      liveOrdersFilter === 'all'
-                        ? 'text-red-400 border-b-2 border-red-400 bg-red-500/10'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <i className="fas fa-globe"></i>
-                    <span>All System Live Orders ({allAdminOrdersList.length || ordersList.length})</span>
-                  </button>
-                  <button
-                    onClick={() => setLiveOrdersFilter('my')}
-                    className={`flex-1 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
-                      liveOrdersFilter === 'my'
-                        ? 'text-red-400 border-b-2 border-red-400 bg-red-500/10'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <i className="fas fa-user-check"></i>
-                    <span>My Live Orders ({ordersList.length})</span>
-                  </button>
-                </div>
-
-                {/* Modal Content */}
-                <div className="p-4 overflow-y-auto max-h-[60vh] space-y-3">
-                  {/* Status Banner */}
-                  <div className="p-3 rounded-2xl bg-gradient-to-r from-red-950/40 to-slate-900 border border-red-500/20 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span className="text-slate-300 font-bold text-[11px]">SMM Automated Dispatch: <span className="text-emerald-400">ONLINE</span></span>
-                    </div>
-                    <button
-                      onClick={() => showToast('Refreshed live order feed!', 'success')}
-                      className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-[10px] font-extrabold text-slate-300 border border-white/10 flex items-center gap-1"
-                    >
-                      <i className="fas fa-sync-alt text-[9px]"></i> Refresh
-                    </button>
-                  </div>
-
-                  {(liveOrdersFilter === 'all' ? (allAdminOrdersList.length > 0 ? allAdminOrdersList : ordersList) : ordersList).length === 0 ? (
-                    <div className="text-center py-12">
-                      <i className="fas fa-box-open text-4xl text-slate-600 mb-2"></i>
-                      <p className="text-xs font-bold text-slate-400">No live orders found right now</p>
-                    </div>
-                  ) : (
-                    (liveOrdersFilter === 'all' ? (allAdminOrdersList.length > 0 ? allAdminOrdersList : ordersList) : ordersList).slice(0, 15).map((ord) => {
-                      const platform = getPlatformMeta(ord.service);
-                      const isPending = ord.status.toLowerCase().includes('pending');
-                      const isCompleted = ord.status.toLowerCase().includes('completed') || ord.status.toLowerCase().includes('success');
-                      const isProcessing = ord.status.toLowerCase().includes('process') || ord.status.toLowerCase().includes('progress');
-
-                      return (
-                        <div
-                          key={ord.id}
-                          className="p-3.5 rounded-2xl bg-slate-900/90 border border-white/10 hover:border-red-500/30 transition-all space-y-2.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div
-                                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm"
-                                style={{ color: platform.color, backgroundColor: `${platform.color}15` }}
-                              >
-                                <i className={platform.icon}></i>
-                              </div>
-                              <div>
-                                <h4 className="font-extrabold text-xs text-white line-clamp-1">{ord.service}</h4>
-                                <span className="text-[9px] font-mono text-slate-400">ID: #{ord.id.slice(0, 8)}</span>
-                              </div>
-                            </div>
-
-                            <span
-                              className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded-full border ${
-                                isCompleted
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                  : isProcessing
-                                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30 animate-pulse'
-                                  : isPending
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                  : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                              }`}
-                            >
-                              {ord.status.toUpperCase()}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-[10px] bg-black/30 p-2 rounded-xl border border-white/5">
-                            <div>
-                              <span className="text-slate-400 block">Quantity:</span>
-                              <span className="font-extrabold text-white font-mono">{ord.qty.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-400 block">Cost:</span>
-                              <span className="font-extrabold text-emerald-400 font-mono">‡ß≥ {ord.cost.toFixed(2)}</span>
-                            </div>
-                          </div>
-
-                          {/* Live Progress Indicator */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[9px] text-slate-400 font-mono">
-                              <span>Live Dispatch Status</span>
-                              <span className="text-red-400 font-bold">{isCompleted ? '100%' : isProcessing ? '65%' : '20%'}</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-500 rounded-full ${
-                                  isCompleted ? 'bg-emerald-400' : isProcessing ? 'bg-cyan-400 animate-pulse' : 'bg-amber-400'
-                                }`}
-                                style={{ width: isCompleted ? '100%' : isProcessing ? '65%' : '20%' }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TASKS & REWARDS MODAL WITH SCREENSHOT PROOF UPLOAD */}
-          {showTasksModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#0b1329] border border-amber-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] h-[85vh] sm:h-auto flex flex-col overflow-hidden shadow-[0_0_50px_rgba(245,158,11,0.25)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/90 flex-shrink-0">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                      <i className="fas fa-tasks text-xs"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                        <span>Daily Tasks & Bonus (‡¶ü‡¶æ‡¶∏‡ßç‡¶ï ‡¶™‡ßç‡¶∞‡ßÅ‡¶´ ‡¶ì ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü)</span>
-                        <span className="bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-full">
-                          EARN ‡ß≥
-                        </span>
-                      </h3>
-                      <p className="text-[9px] text-slate-400">‡¶ü‡¶æ‡¶∏‡ßç‡¶ï ‡¶∏‡¶Æ‡ßç‡¶™‡¶®‡ßç‡¶® ‡¶ï‡¶∞‡ßá ‡¶™‡ßç‡¶∞‡ßÅ‡¶´ ‡¶ì ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü ‡¶Ü‡¶™‡¶≤‡ßã‡¶° ‡¶¶‡¶ø‡ßü‡ßá ‡¶∞‡¶ø‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶™‡¶æ‡¶®</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setShowTasksModal(false)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                {/* Banner Summary */}
-                <div className="p-4 bg-gradient-to-r from-amber-950/50 via-yellow-900/30 to-slate-900 border-b border-white/5 flex items-center justify-between flex-shrink-0">
-                  <div>
-                    <span className="text-[10px] text-amber-300/80 font-bold uppercase tracking-wider block">Total Tasks Rewarded</span>
-                    <h4 className="text-lg font-black text-amber-400 font-mono">
-                      ‡ß≥ {allTaskSubmissions
-                        .filter((s) => s.userId === currentUser?.uid && s.status === 'Approved')
-                        .reduce((sum, s) => sum + (s.reward || 0), 0)
-                        .toFixed(2)}
-                    </h4>
-                  </div>
-                  <span className="text-xs font-bold text-slate-300 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
-                    {allTaskSubmissions.filter((s) => s.userId === currentUser?.uid && s.status === 'Approved').length} Tasks Completed üéâ
-                  </span>
-                </div>
-
-                {/* Tasks List */}
-                <div className="p-4 overflow-y-auto flex-1 min-h-0 space-y-3.5 overscroll-contain pb-12">
-                  {customTasks.map((task) => {
-                    const userSub = allTaskSubmissions.find(
-                      (s) => s.taskId === task.id && s.userId === currentUser?.uid
-                    );
-
-                    return (
-                      <div key={task.id} className="p-3.5 rounded-2xl bg-slate-900/90 border border-white/10 space-y-3">
-                        {/* Task Banner Image if provided by Admin */}
-                        {task.image && (
-                          <div
-                            onClick={() => setSelectedScreenshotPreview(task.image!)}
-                            className="w-full aspect-video rounded-xl overflow-hidden border border-amber-500/30 cursor-pointer group relative bg-black/60 shadow"
-                          >
-                            <img src={task.image} alt={task.title} className="w-full h-full object-cover group-hover:scale-105 transition" />
-                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                              <i className="fas fa-search-plus text-white text-sm"></i>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm border border-amber-500/30 flex-shrink-0">
-                              <i className={task.icon || 'fas fa-tasks'}></i>
-                            </div>
-                            <div>
-                              <h4 className="font-extrabold text-xs text-white">{task.title}</h4>
-                              <p className="text-[10px] text-slate-400">{task.description}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-black text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 flex-shrink-0">
-                            +‡ß≥ {task.reward.toFixed(2)}
-                          </span>
-                        </div>
-
-                        {/* Task Action & Proof Status */}
-                        <div className="flex flex-wrap gap-2 pt-1 border-t border-white/5">
-                          {task.link && task.link !== '#' && (
-                            <a
-                              href={task.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-2 rounded-xl bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 text-[11px] font-extrabold flex items-center justify-center gap-1.5 border border-sky-500/30"
-                            >
-                              <i className="fas fa-external-link-alt text-[10px]"></i> VISIT LINK
-                            </a>
-                          )}
-
-                          {userSub ? (
-                            <div className="flex-1 flex items-center justify-end">
-                              {userSub.status === 'Approved' && (
-                                <span className="w-full py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-extrabold text-center flex items-center justify-center gap-1.5">
-                                  <i className="fas fa-check-circle text-emerald-400"></i> APPROVED & REWARDED üéâ
-                                </span>
-                              )}
-                              {userSub.status === 'Pending' && (
-                                <span className="w-full py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-extrabold text-center flex items-center justify-center gap-1.5 animate-pulse">
-                                  <i className="fas fa-clock text-amber-400"></i> ‡¶Ø‡¶æ‡¶Å‡¶ö‡¶æ‡¶á ‡¶ö‡¶≤‡¶õ‡ßá (PENDING REVIEW)
-                                </span>
-                              )}
-                              {userSub.status === 'Rejected' && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedTaskForProof(task);
-                                    setTaskProofNotes('');
-                                    setTaskProofScreenshots([]);
-                                  }}
-                                  className="w-full py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition active:scale-95"
-                                >
-                                  <i className="fas fa-redo"></i> RE-SUBMIT PROOF (REJECTED)
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setSelectedTaskForProof(task);
-                                setTaskProofNotes('');
-                                setTaskProofScreenshots([]);
-                              }}
-                              className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black text-[11px] font-black flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition"
-                            >
-                              <i className="fas fa-camera"></i>
-                              <span>‡¶™‡ßç‡¶∞‡ßÅ‡¶´ ‡¶ì ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü ‡¶¶‡¶ø‡¶® (SUBMIT PROOF)</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TASK SCREENSHOT PROOF UPLOAD MODAL */}
-          {selectedTaskForProof && (
-            <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex flex-col justify-center p-3 sm:p-4 animate-fade-in">
-              <div className="bg-[#0b1329] border border-amber-500/40 rounded-3xl max-h-[92vh] flex flex-col overflow-hidden shadow-[0_0_60px_rgba(245,158,11,0.3)] w-full max-w-lg mx-auto">
-                {/* Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/90">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm">
-                      <i className="fas fa-upload"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-xs text-white">
-                        Submit Proof: {selectedTaskForProof.title}
-                      </h3>
-                      <p className="text-[10px] text-amber-300 font-mono">Reward: +‡ß≥{selectedTaskForProof.reward.toFixed(2)}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setSelectedTaskForProof(null);
-                      setTaskProofScreenshots([]);
-                      setTaskProofNotes('');
-                    }}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                <div className="p-4 overflow-y-auto flex-1 min-h-0 space-y-4 overscroll-contain pb-10">
-                  {/* Task Instructions */}
-                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 space-y-1">
-                    <span className="font-bold block text-amber-400">
-                      <i className="fas fa-info-circle mr-1"></i> ‡¶®‡¶ø‡¶∞‡ßç‡¶¶‡ßá‡¶∂‡¶æ‡¶¨‡¶≤‡ßÄ:
-                    </span>
-                    <p className="text-[11px] leading-relaxed">
-                      ‡¶ü‡¶æ‡¶∏‡ßç‡¶ï ‡¶∏‡¶Æ‡ßç‡¶™‡¶®‡ßç‡¶® ‡¶ï‡¶∞‡¶æ‡¶∞ ‡¶™‡ßç‡¶∞‡¶Æ‡¶æ‡¶£ ‡¶π‡¶ø‡¶∏‡ßá‡¶¨‡ßá ‡¶∏‡¶∞‡ßç‡¶¨‡ßã‡¶ö‡ßç‡¶ö ‡ß´‡¶ü‡¶ø ‡¶™‡¶∞‡ßç‡¶Ø‡¶®‡ßç‡¶§ ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü ‡¶Ü‡¶™‡¶≤‡ßã‡¶° ‡¶ï‡¶∞‡¶§‡ßá ‡¶™‡¶æ‡¶∞‡¶¨‡ßá‡¶®‡•§ ‡¶∏‡¶æ‡¶•‡ßá ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶Ü‡¶á‡¶°‡¶ø ‡¶¨‡¶æ ‡¶®‡ßã‡¶ü ‡¶≤‡¶ø‡¶ñ‡ßá ‡¶∏‡¶æ‡¶¨‡¶Æ‡¶ø‡¶ü ‡¶¶‡¶ø‡¶®‡•§
-                    </p>
-                  </div>
-
-                  {/* Proof Text Input */}
-                  <div>
-                    <label className="form-label">Proof Details / User ID / Notes (‡¶ê‡¶ö‡ßç‡¶õ‡¶ø‡¶ï ‡¶§‡¶•‡ßç‡¶Ø)</label>
-                    <textarea
-                      rows={2}
-                      className="input-modern text-xs resize-none"
-                      placeholder="e.g. My Telegram Username: @john, FB Name: Rahul"
-                      value={taskProofNotes}
-                      onChange={(e) => setTaskProofNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Screenshot File Upload Box (Up to 5 Screenshots) */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-extrabold text-white flex items-center gap-1.5">
-                        <i className="fas fa-images text-amber-400"></i>
-                        <span>Upload Screenshots (‡¶™‡ßç‡¶∞‡ßÅ‡¶´ ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü)</span>
-                      </span>
-                      <span className={`font-mono text-[10px] font-bold ${taskProofScreenshots.length >= 5 ? 'text-amber-400' : 'text-slate-400'}`}>
-                        {taskProofScreenshots.length} / 5 Screenshots
-                      </span>
-                    </div>
-
-                    {/* Upload Drop Button */}
-                    <label
-                      className={`relative flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-2xl transition cursor-pointer text-center ${
-                        taskProofScreenshots.length >= 5
-                          ? 'border-slate-700 bg-slate-900/50 opacity-60 cursor-not-allowed'
-                          : 'border-amber-500/40 hover:border-amber-400 bg-amber-500/5 hover:bg-amber-500/10'
-                      }`}
-                    >
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleScreenshotUpload}
-                        disabled={taskProofScreenshots.length >= 5}
-                        className="hidden"
-                      />
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-base mb-1.5 border border-amber-500/30">
-                        <i className="fas fa-cloud-arrow-up"></i>
-                      </div>
-                      <span className="text-xs font-bold text-white">
-                        {taskProofScreenshots.length >= 5 ? 'Maximum 5 Screenshots Uploaded' : '‡¶ï‡ßç‡¶≤‡¶ø‡¶ï ‡¶ï‡¶∞‡ßá ‡¶∏‡ßç‡¶ï‡ßç‡¶∞‡¶ø‡¶®‡¶∂‡¶ü ‡¶®‡¶ø‡¶∞‡ßç‡¶¨‡¶æ‡¶ö‡¶® ‡¶ï‡¶∞‡ßÅ‡¶®'}
-                      </span>
-                      <span className="text-[9px] text-slate-400 mt-0.5">
-                        (You can upload up to 5 screenshot proof photos)
-                      </span>
-                    </label>
-
-                    {/* Screenshots Preview Thumbnails Grid */}
-                    {taskProofScreenshots.length > 0 && (
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-2">
-                        {taskProofScreenshots.map((imgSrc, idx) => (
-                          <div
-                            key={idx}
-                            className="group relative aspect-square rounded-xl overflow-hidden border border-amber-500/40 bg-black/60 shadow"
-                          >
-                            <img
-                              src={imgSrc}
-                              alt={`Proof ${idx + 1}`}
-                              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition"
-                              onClick={() => setSelectedScreenshotPreview(imgSrc)}
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveScreenshot(idx);
-                              }}
-                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] shadow hover:scale-110 transition"
-                              title="Delete screenshot"
-                            >
-                              <i className="fas fa-times"></i>
-                            </button>
-                            <span className="absolute bottom-1 left-1 bg-black/80 text-[8px] font-mono text-amber-300 px-1 rounded font-bold">
-                              #{idx + 1}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Submit Button */}
-                  <button
-                    onClick={handleSubmitTaskProof}
-                    disabled={taskSubmitting}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs tracking-wider shadow-lg transition active:scale-95 flex items-center justify-center gap-2 mt-2"
-                  >
-                    {taskSubmitting ? (
-                      <span className="loading-spinner"></span>
-                    ) : (
-                      <>
-                        <i className="fas fa-paper-plane text-xs"></i>
-                        <span>SUBMIT TASK PROOF FOR VERIFICATION</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* LIGHTBOX FULLSCREEN SCREENSHOT PREVIEW MODAL */}
-          {selectedScreenshotPreview && (
-            <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-3 animate-fade-in">
-              <div className="relative max-w-4xl w-full flex flex-col items-center justify-center">
-                {/* Close Button */}
-                <button
-                  onClick={() => setSelectedScreenshotPreview(null)}
-                  className="absolute -top-12 right-0 w-10 h-10 rounded-full bg-white/10 border border-white/20 text-white flex items-center justify-center hover:bg-white/20 text-base shadow-lg z-10 transition active:scale-95"
-                >
-                  <i className="fas fa-times"></i>
-                </button>
-
-                {/* Screenshot Image */}
-                <div className="bg-slate-950 p-2 rounded-2xl border border-white/20 shadow-2xl max-h-[85vh] overflow-hidden flex items-center justify-center">
-                  <img
-                    src={selectedScreenshotPreview}
-                    alt="Full Screenshot Proof Preview"
-                    className="max-h-[80vh] w-auto object-contain rounded-xl"
-                  />
-                </div>
-
-                <p className="text-[10px] font-mono text-slate-400 mt-3 flex items-center gap-1.5">
-                  <i className="fas fa-expand text-amber-400"></i>
-                  <span>Full High-Resolution Screenshot Proof View</span>
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* 3D WELCOME MODAL */}
-          {welcomeConfig.enabled && (
-            <Welcome3DModal
-              show={showWelcomeModal}
-              soundEnabled={welcomeConfig.soundEnabled !== false}
-              userBalance={userBalance}
-              userTotalOrders={userTotalOrders}
-              welcomeTitle={welcomeConfig.title}
-              welcomeText={welcomeConfig.text}
-              audioMode={welcomeConfig.audioMode || 'tts'}
-              customAudioUrl={welcomeConfig.customAudioUrl}
-              siteLogo={adminSiteLogo || welcomeConfig.siteLogo}
-              onClose={() => setShowWelcomeModal(false)}
-              onNavigateToOrder={() => {
-                setActiveTab('home');
-                setShowWelcomeModal(false);
-              }}
-              onNavigateToDeposit={() => {
-                setActiveTab('funds');
-                setShowWelcomeModal(false);
-              }}
-            />
-          )}
-
-          {/* 3D THEME & SETTINGS MODAL */}
-          {show3DThemeModal && (
-            <div className="fixed inset-0 z-[9990] bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-fade-in">
-              <div className="relative max-w-sm w-full bg-slate-900/95 border border-cyan-500/30 rounded-[28px] p-5 shadow-[0_0_50px_rgba(56,189,248,0.25)] text-left">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow">
-                      <i className="fas fa-cube text-sm"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white flex items-center gap-1.5">
-                        <span>Live 3D ‡¶•‡¶ø‡¶Æ ‡¶ï‡¶®‡ßç‡¶ü‡ßç‡¶∞‡ßã‡¶≤</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">3D MODE</span>
-                      </h3>
-                      <p className="text-[10px] text-slate-400">‡¶∞‡¶ø‡¶Ø‡¶º‡ßá‡¶≤-‡¶ü‡¶æ‡¶á‡¶Æ 3D ‡¶¨‡ßç‡¶Ø‡¶æ‡¶ï‡¶ó‡ßç‡¶∞‡¶æ‡¶â‡¶®‡ßç‡¶° ‡¶ì ‡¶ï‡¶æ‡¶≤‡¶æ‡¶∞ ‡¶∏‡ßá‡¶ü ‡¶ï‡¶∞‡ßÅ‡¶®</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShow3DThemeModal(false)}
-                    className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
-
-                {/* 3D Toggle */}
-                <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2.5">
-                    <i className="fas fa-magic text-cyan-400 text-sm"></i>
-                    <div>
-                      <h4 className="text-xs font-bold text-white">3D ‡¶™‡¶æ‡¶∞‡ßç‡¶ü‡¶ø‡¶ï‡ßá‡¶≤ ‡¶ì ‡¶™‡ßç‡¶Ø‡¶æ‡¶∞‡¶æ‡¶≤‡¶æ‡¶ï‡ßç‡¶∏</h4>
-                      <p className="text-[10px] text-slate-400">‡¶á‡¶®‡ßç‡¶ü‡¶æ‡¶∞‡ßá‡¶ï‡ßç‡¶ü‡¶ø‡¶≠ ‡¶Æ‡ßã‡¶∂‡¶® ‡¶ì ‡¶°‡¶ø‡¶™‡ßç‡¶• ‡¶è‡¶´‡ßá‡¶ï‡ßç‡¶ü</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const next = !is3DEnabled;
-                      setIs3DEnabled(next);
-                      localStorage.setItem('smm_3d_enabled', String(next));
-                      haptic('light');
-                    }}
-                    className={`w-12 h-6 rounded-full p-0.5 transition duration-300 flex items-center ${
-                      is3DEnabled ? 'bg-cyan-500 justify-end' : 'bg-slate-700 justify-start'
-                    }`}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-white shadow-md"></div>
-                  </button>
-                </div>
-
-                {/* Themes List */}
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  3D ‡¶•‡¶ø‡¶Æ ‡¶∏‡¶ø‡¶≤‡ßá‡¶ï‡ßç‡¶ü ‡¶ï‡¶∞‡ßÅ‡¶®:
-                </h4>
-                <div className="grid grid-cols-2 gap-2.5 mb-4">
-                  {(Object.keys(THEME_CONFIGS) as ThreeDTheme[]).map((themeKey) => {
-                    const cfg = THEME_CONFIGS[themeKey];
-                    const isSelected = threeDTheme === themeKey;
-                    return (
-                      <button
-                        key={themeKey}
-                        onClick={() => {
-                          setThreeDTheme(themeKey);
-                          localStorage.setItem('smm_3d_theme', themeKey);
-                          haptic('light');
-                        }}
-                        className={`p-3 rounded-2xl border text-left transition relative overflow-hidden active:scale-95 ${
-                          isSelected
-                            ? 'bg-white/10 border-cyan-400 shadow-[0_0_15px_rgba(56,189,248,0.3)]'
-                            : 'bg-slate-800/60 border-white/5 hover:border-white/20'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div
-                            className="w-4 h-4 rounded-full shadow"
-                            style={{ background: `linear-gradient(135deg, ${cfg.primaryColor}, ${cfg.secondaryColor})` }}
-                          />
-                          {isSelected && <i className="fas fa-check-circle text-cyan-400 text-xs"></i>}
-                        </div>
-                        <p className="text-xs font-bold text-white truncate">{cfg.name}</p>
-                        <span className="text-[10px] text-slate-400 font-mono">{cfg.badge}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Replay 3D Welcome Button */}
-                <button
-                  onClick={() => {
-                    setShow3DThemeModal(false);
-                    setShowWelcomeModal(true);
-                    haptic('heavy');
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold text-xs shadow-lg hover:brightness-110 active:scale-[0.98] transition flex items-center justify-center gap-2"
-                >
-                  <i className="fas fa-play text-amber-300"></i>
-                  <span>üéâ 3D ‡¶ì‡¶Ø‡¶º‡ßá‡¶≤‡¶ï‡¶æ‡¶Æ ‡¶Ö‡ßç‡¶Ø‡¶æ‡¶®‡¶ø‡¶Æ‡ßá‡¶∂‡¶® ‡¶¶‡ßá‡¶ñ‡ßÅ‡¶® (Play Welcome)</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* BOTTOM NAVIGATION */}
-          <nav className="bottom-nav-premium">
-            <div
-              className={`nav-item-premium ${activeTab === 'home' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('home');
-                haptic('light');
-              }}
-            >
-              <i className="fas fa-home"></i>
-              <span>Home</span>
-            </div>
-            <div
-              className={`nav-item-premium ${activeTab === 'orders' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('orders');
-                haptic('light');
-              }}
-            >
-              <i className="fas fa-list-check"></i>
-              <span>Orders</span>
-            </div>
-            <div
-              className={`nav-item-premium ${activeTab === 'funds' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('funds');
-                haptic('light');
-              }}
-            >
-              <i className="fas fa-wallet"></i>
-              <span>Funds</span>
-            </div>
-            <div
-              className={`nav-item-premium ${activeTab === 'profile' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('profile');
-                haptic('light');
-              }}
-            >
-              {userPhotoURL || currentUser?.photoURL ? (
-                <img
-                  src={userPhotoURL || currentUser?.photoURL}
-                  alt="Profile"
-                  className="w-5 h-5 rounded-full object-cover border border-amber-400"
-                />
-              ) : (
-                <i className="fas fa-user-circle"></i>
-              )}
-              <span>Profile</span>
-            </div>
-            {isAdminUser && (
-              <div
-                className={`nav-item-premium ${activeTab === 'admin' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('admin');
-                  haptic('heavy');
-                }}
-              >
-                <i className="fas fa-crown text-amber-400"></i>
-                <span>Admin</span>
-              </div>
-            )}
-
-          </nav>
-        </div>
-      )}
-    </div>
-  );
-}
+                  <div clxú‰Mo«ıû_1QìJµ¸êDCVM≤¨¥$ªà∏Ö ÿKÓêúhwg≥≥…0<4áˆP=F/“)4ÜR¯–˙P¥Ö?•ofvWªÀùŸ%m#m≥∞©˝òyÔÕ˚~o∆dÏÅÈ‡ˆFœ∆cDÏ0£ã› ˚®oz∆v≠µq πÓZ‰
+um3ö?2ˆ– ˛˚tËZÿ2∆6ÍÙ”È`ﬂh5ıÌZFÒ…ê§7â<¬)ªçÜ1†&Iƒ=ì°ûit∞mK c∂qp∑Nd◊Ånıäî(;)ú‘¿Âõj[-s‰ﬂ— ñò≥V¡NÂö ÛL˜‡ÜêÆÍ≤ªuÒN9e:t}lZbŒ=@®Ån›BUÂîOr1 &BJ.@‹ûﬂÒ∆H¨∂cõ›K‰ççm‰MåFm;ñtoh€öuÂ:C.Èà,X˘ÊL%®˙`G)D/πÏƒ•¸l3¿RÔ>ˆ,∏g[»¬e$@,0É!√›B¶Î¬∫ÿ©ÇÄº’,¸ê˜%cP´i– ™p∑3Í*9L›#õt/€S«Ù/m[@fÎëÇªR}b;âÌËˆ˜π˘6qq⁄_4BŸj-ÆnÕXŸÏ>ÍPfÑRfCAôZè¯z¨N©MíK˘ J®ÁlÃ◊Í&j ÜÉ≥	ÓûRÀ¥´=”fX©ﬂÖWXoΩï·í|€,ÎÉc[et„ÚYºíßàñT∆U´ôØ∞/ïuMÎÔ°îgE'ÑËΩ˙2õ≥fËªàÛ†g”ë11Ãa@ëcéçÅq~ªq5∏@‡®∫æ®BÂ‘M"ÆŸÿÌ‘n∑¡>ﬂWògñ¡¨P@‹÷àç\¶l Ÿæ3∂ìrærv:‹µ(eëÎ<«,´-±©o@ C©Ö£	Vwóõh_¡¢4W”´V≈+aUS≈"l “Â&+AmT	D‹5∫ƒÔ⁄a‡ÎÿCπ"∞(q/LÂ«
+¿§á$˙Z0Ò∞ên%ïÕ\î#”Ê‘lL|”∂"Ñ—„8Öµ+0˙¥{a$ÆE˙4B>≠ÅœÛ©C¯˙§bÛà{·˜1&*Cﬂ’§1‹@4È√%û¥•›’à&^-ycïﬁ»|u âT´ûèØ¯DÌ4Ñ¯∞PEö™d	F4Ç'ò¢Z≠Ên!»˜ëàh‡nnjl™$∆Øôn˘7=}Í;l£`≤Õ£â!êÂ∫†«∞btuá>£æ·Q"‹—ı<ìîk*‡“˚®˙!ù…Pê;çÂø€@l`Z‡äœOOö-o¸ƒÔwÃÍˆnk´Ÿ⁄€j6∑µfkÛ¢RÄm?Ém∑ëéï-D¡±ì`bÏ5t∞fO’÷ÈÖ&›Él”D∂∑SêWgÄLüÊ‰Â">¯r>–`üh‰€4,±H√SaÁffçy6	™TŸ<o\†!∏Éﬂ‹ÔÕãô.˛Ñx‘Âõé±F≥Äëe“Ôàmå0vy»,ÀK«›¢“1
+§∫“±©¨ƒ”WËˆÿXg˙ôÒ“Bãj«ƒ™≤U‰
+√ÅëÆ
+o2zÓ¸Mó8‹⁄ Ùy™°Øn.e.ú†¶>ÿ-!â,Õ˘%`+JdÍ“çÉò°ûï#∫ÑíÊ£ÕfÜî ≈π «†F∑Õ1∂bÇ âffü”§H™JìS0@˚Y{fy+Gêπ∞s^.ΩXâ'ûﬂü~xrÔ·œ—È√˚á'ô‘~ †∆:5â›°cQe-+˙í˝`6".}ÜüÅV»\–Ï^÷˜‡˛Z>ıxvËé%≠V¯ö.µc_Å]1g?„q=ÄoyiEœ¥0‰aK&û%h8ˇA£”‹Ÿæsë©Òíi„N#6DôÓ∫Ë+òΩ=^¡§Ièãù±,ps…x€jDÒ∂y{´π!w˚ƒ€mà∑h$MûCÒ2›ãb)«i	i	)¸tP∂⁄Y°™çúu*÷ÔÂ◊O%;0ØŸMg˜%√s¢BX≠Ù√Ó∂©áˇZ£‹~—=:F’≈¸zÒ¸◊ã9¸{âÛã˘≥≈Ûﬂ.ÊØ6KvL9®◊jòF5·€Óò∆ÑÍb‡w€,=zÖ|5 ºº-RÀ!Ó[lîj˙k˘›µ§Á◊ˆ◊˛ªk
+æ≠ﬂYS˜’tÌ≥Gfáïr‘ÇJOùÚ√-Ö^I¿°pÅæjÖ∏pW)ÓÙ©,
+∏]Ús\•}W°4Öﬂ ÷« Çÿâ	ïΩI¨“j°^nÖl¨ô†ü”:jjÍ÷˝∏ZÛÁÊWª+®®X¥.	Wˆ!Ö™SŒ2ﬁ©ª¶3ç◊vã◊V®.u< ˇäJE‰~œî 3=†⁄≥M™÷O…E*ßØƒÔ!ì¯Îb˛Ø≈¸O‚˜Îµî≠¿Ö¢#–êÙŸz»ﬂn»w3•∑ä∂3b	ª,ÿÕ»CS~GCÃŒì:'¬ËÌÀı75Ï76~Aá~dxà0Ñ/òhãp}≠‹·‡WÃh—=ÊO≤Å\–X‘¶ñ¢9ŒAÙ∆ó|#ﬂ	Êñ√7M´!ÄÇÊÃ:ÊÇé≤dJπñ≤Æ©úÙj ∂r™Ã-”V.—X÷É–ıìıÂu{ò%ãØw6!iπoxÚÏ€©˛•"y)fïK¥œõç‘ÑR‘\_3d ?6 ò)ÏR0%˚õ˘M…ÂÃ!Q$HÎeòüúx£=…ı§Çö“˝QuaóSægi≈éÙ˜Õò;√Œ'∏Ãä[√Îvbo˙Å†°¢/î*s*ƒbCì¥G≠›>j˚æWn)™µ¨æCœëÃG—‘w ÂY)QÔ}È∫Q’6;ÿN´èÔ‚-ÔVµ‡…ﬂã≈¸ﬂã˘?ÛoÛB≤'Fh‡◊éÛ]q©?™sH¸J–% ÇÅÇ∏∫)êÿvÒ 4˚Ì\Î◊–C°[Ñ±!Fú/vπ ‚~:$˛DÎ ¥áXÜˇê€„”Ì√Ñ*NñG·‘*Æ¶ﬂ«AMÄ’‰u•,uj˙:Ç>ï6ƒ˝+ëÿ-≤˙ø…~!ø-√Ø‡æÑÏπTMH84ºÚÈàµßªÂ∂€S≤G>f‰3l∏‘UúØíWJ˚ºÁ8·…(;p°¯πFx>ÌÿÿÅW»¬˜)µZIµ8-v>*µßñW•g◊Sê≤áÅ\À∆ºˆ„t™	≤3ÅqVl!	˘•Œ<v◊|iÚƒ`‘&eÀ˝’è-f®”V^9a›¶2ê1è∏‡9ä7cıE
+`(à∞E{âÕâ‘ZŒé‹Gß«ggá?9]y ¢W(Âc¿J•m†ÎŒá™cÊ[›}||rÙÙÌ‹œ›Ω˚€]Í‡ù˚¢ûÇŒ∑I€b≥4$Ü§©Â©=ƒ÷˚O<,èzD”°ä…ëâÈ—#âÌ?¥–ûÜOG‘Ìë~-˘}˛9™,Êøó1[¥m^ÚÕ.‰kÙ—ËÏÙ˝Ï¡Ò…ªï|†h*I1ˇrÒ¸óHG~∑ò#ˇºø◊ÚW(◊ƒo•ÚÖ`˛ÚUzæ`·f.æ˝]¸Üü!™ÆÑÚı´≈Ûﬂàa1PæÌu-Úó?ã_AÆ–˚ÎÑ)<Äø#æà…zôÄﬂæâFÛfJGÀgÚ’´àxıaa◊∞úáÕ°E(ËÀí „ÇªA¿2ª‡©s»G}Ï€ŸŸÈØÈôåß€«nË±”Ûíﬂ–ªÌ∂<OóôÆ˘ÑˆÈ“‹}z4&êÃfˆñíÜíª∑D›ÊÈCÒà
+›W6TÃû±Äëá›Ä\a—£√∫"]Ã*ôq35˜Â—‘7MI|‚UCH¬Õ¶|Y»µ¯¿òΩÛ   ˇˇ HbÛ¸

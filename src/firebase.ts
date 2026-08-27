@@ -1,5 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  onAuthStateChanged,
+  signOut
+} from 'firebase/auth';
+import {
   getFirestore,
   doc,
   collection,
@@ -29,6 +38,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 export const db = getFirestore(app);
 
 // Default initial services with REAL SMMGen API Service IDs (+20% price markup included)
@@ -444,6 +458,13 @@ export const DEFAULT_SERVICES = [
 ];
 
 export {
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  onAuthStateChanged,
+  signOut,
   doc,
   collection,
   onSnapshot,
