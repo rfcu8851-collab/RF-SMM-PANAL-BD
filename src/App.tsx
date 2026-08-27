@@ -95,6 +95,7 @@ export interface ReferralCommission {
 export interface ReferralConfig {
   enabled: boolean;
   bonusPercent: number;
+  websiteUrl?: string;
 }
 
 export interface TaskSubmission {
@@ -594,7 +595,8 @@ export default function App() {
   const [allReferralCommissions, setAllReferralCommissions] = useState<ReferralCommission[]>([]);
   const [referralConfig, setReferralConfig] = useState<ReferralConfig>({
     enabled: true,
-    bonusPercent: 5,
+    bonusPercent: 10,
+    websiteUrl: '',
   });
   const [adminSavingReferralConfig, setAdminSavingReferralConfig] = useState(false);
 
@@ -983,7 +985,8 @@ export default function App() {
         const d = snap.data();
         setReferralConfig({
           enabled: d.enabled !== false,
-          bonusPercent: typeof d.bonusPercent === 'number' ? d.bonusPercent : 5,
+          bonusPercent: typeof d.bonusPercent === 'number' ? d.bonusPercent : 10,
+          websiteUrl: d.websiteUrl || '',
         });
       }
     });
@@ -1004,7 +1007,7 @@ export default function App() {
     };
   }, []);
 
-  // 11. Realtime Current User Referral Commissions Sync
+  // 11. Realtime Current User Referral Commissions & Stats Sync
   useEffect(() => {
     if (!isLoggedIn || !currentUser?.uid) return;
     const qUser = query(
@@ -1020,11 +1023,26 @@ export default function App() {
         return timeB - timeA;
       });
       setUserReferralCommissions(list);
+      const earned = list.reduce((sum, item) => sum + (item.commissionAmount || 0), 0);
+      setUserReferralEarnings(earned);
     }, (err) => {
       console.log('User referral commissions sync:', err.message);
     });
     return () => unsub();
   }, [isLoggedIn, currentUser]);
+
+  // Sync user total referrals count from allUsersList
+  useEffect(() => {
+    if (!currentUser) return;
+    const myUid = currentUser.uid;
+    const myUsername = (currentUser.username || '').toLowerCase();
+    const count = allUsersList.filter(
+      (u: any) =>
+        (u.referredBy && (u.referredBy === myUid || u.referredBy.toLowerCase() === myUsername)) ||
+        (u.referredByUsername && u.referredByUsername.toLowerCase() === myUsername)
+    ).length;
+    setUserTotalReferrals(count);
+  }, [allUsersList, currentUser]);
 
   // 10. Realtime Gateway Countdown Timer
   useEffect(() => {
@@ -1381,7 +1399,7 @@ export default function App() {
     }
   };
 
-  // Helper: Award Referral 5% Deposit Bonus to Referrer
+  // Helper: Award Referral Deposit Bonus (e.g. 10%) to Referrer upon Deposit Approval
   const processReferralDepositBonus = async (
     depositingUid: string,
     depositAmount: number,
@@ -1406,14 +1424,38 @@ export default function App() {
 
       if (!referrerUid || referrerUid === depositingUid) return;
 
-      const bonusPercent = referralConfig.enabled !== false ? (referralConfig.bonusPercent || 5) : 5;
+      // Fetch fresh referral config or use local
+      let bonusPercent = referralConfig.enabled !== false ? (referralConfig.bonusPercent ?? 10) : 10;
+      try {
+        const cfgSnap = await getDoc(doc(db, 'settings', 'referral_config'));
+        if (cfgSnap.exists()) {
+          const d = cfgSnap.data();
+          if (d.enabled === false) return;
+          if (typeof d.bonusPercent === 'number') bonusPercent = d.bonusPercent;
+        }
+      } catch (e) {}
+
       if (bonusPercent <= 0) return;
 
       const commission = Math.round((depositAmount * (bonusPercent / 100)) * 100) / 100;
       if (commission <= 0) return;
 
-      const refUserRef = doc(db, 'users', referrerUid);
-      const refSnap = await getDoc(refUserRef);
+      // Resolve referrer user doc (whether referrerUid is UID or Username)
+      let resolvedReferrerUid = referrerUid;
+      let refUserRef = doc(db, 'users', resolvedReferrerUid);
+      let refSnap = await getDoc(refUserRef);
+
+      if (!refSnap.exists()) {
+        const qRefAuth = query(collection(db, 'auth_users'), where('username', '==', referrerUid.toLowerCase()));
+        const snapRefAuth = await getDocs(qRefAuth);
+        if (!snapRefAuth.empty) {
+          resolvedReferrerUid = snapRefAuth.docs[0].id;
+          referrerUsername = snapRefAuth.docs[0].data().username || referrerUsername;
+          refUserRef = doc(db, 'users', resolvedReferrerUid);
+          refSnap = await getDoc(refUserRef);
+        }
+      }
+
       if (refSnap.exists()) {
         const refData = refSnap.data();
         const currentBal = refData.balance || 0;
@@ -1426,7 +1468,7 @@ export default function App() {
 
         // Record Commission Log in Firestore
         await addDoc(collection(db, 'referral_commissions'), {
-          referrerUid,
+          referrerUid: resolvedReferrerUid,
           referrerUsername: referrerUsername || '',
           referredUid: depositingUid,
           referredUsername: userData.username || userData.name || 'User',
@@ -1441,16 +1483,16 @@ export default function App() {
 
         // Add Notification for Referrer
         await addDoc(collection(db, 'user_notifications'), {
-          uid: referrerUid,
+          uid: resolvedReferrerUid,
           title: `🎁 ৳${commission.toFixed(2)} (${bonusPercent}%) রেফারেল বোনাস!`,
-          message: `আপনার রেফারেল ইউজার (${userData.name || 'বন্ধু'}) ৳${depositAmount} ডিপোজিট করায় আপনি ${bonusPercent}% বোনাস হিসেবে ৳${commission.toFixed(2)} ক্যাশ পেয়েছেন!`,
+          message: `আপনার রেফারেল ইউজার (${userData.username || userData.name || 'বন্ধু'}) ৳${depositAmount} ডিপোজিট করায় আপনি ${bonusPercent}% বোনাস হিসেবে ৳${commission.toFixed(2)} ক্যাশ পেয়েছেন!`,
           type: 'promo',
           timestamp: serverTimestamp(),
           unread: true
         });
 
-        if (currentUser?.uid === referrerUid) {
-          showToast(`🎉 You received ৳${commission.toFixed(2)} referral bonus!`, 'success');
+        if (currentUser?.uid === resolvedReferrerUid) {
+          showToast(`🎉 You received ৳${commission.toFixed(2)} (${bonusPercent}%) referral bonus!`, 'success');
         }
       }
     } catch (err) {
@@ -3798,13 +3840,13 @@ export default function App() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-black text-xs text-white">রেফারেল বোনাস (৫% প্রতি ডিপোজিটে)</h4>
+                      <h4 className="font-black text-xs text-white">রেফারেল বোনাস ({referralConfig.bonusPercent || 10}% প্রতি ডিপোজিটে)</h4>
                       <span className="bg-emerald-500 text-black font-black text-[9px] px-1.5 py-0.2 rounded-md">
-                        +5% BONUS
+                        +{referralConfig.bonusPercent || 10}% BONUS
                       </span>
                     </div>
                     <p className="text-[10px] text-amber-200/80 mt-0.5">
-                      বন্ধুকে রেফার করুন, বন্ধু ডিপোজিট করলেই আপনি পাবেন ৫% ক্যাশ বোনাস!
+                      বন্ধুকে রেফার করুন, বন্ধু যেকোনো এমাউন্ট ডিপোজিট করলেই আপনি পাবেন {referralConfig.bonusPercent || 10}% ক্যাশ বোনাস!
                     </p>
                   </div>
                 </div>
@@ -5183,6 +5225,36 @@ export default function App() {
                   >
                     <i className="fas fa-list"></i> MY ORDERS (অর্ডার)
                   </button>
+                </div>
+              </div>
+
+              {/* Referral & 10% Deposit Bonus Card in Profile */}
+              <div
+                onClick={() => {
+                  setShowReferralModal(true);
+                  haptic('heavy');
+                }}
+                className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-600/15 to-slate-900 border border-amber-500/40 flex items-center justify-between cursor-pointer hover:border-amber-400 transition active:scale-95 shadow-[0_4px_20px_rgba(245,158,11,0.15)]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-amber-500/30 text-amber-300 flex items-center justify-center text-lg border border-amber-500/40 shadow-inner">
+                    <i className="fas fa-hand-holding-dollar"></i>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-xs text-white">রেফারেল প্রোগ্রাম ({referralConfig.bonusPercent || 10}% ডিপোজিট বোনাস)</h4>
+                      <span className="bg-emerald-500 text-black font-black text-[9px] px-1.5 py-0.2 rounded font-mono">
+                        +{referralConfig.bonusPercent || 10}%
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-amber-200/80 mt-0.5">
+                      মোট রেফার: <strong className="text-white">{userTotalReferrals} জন</strong> • অর্জিত বোনাস: <strong className="text-emerald-400 font-mono">৳{userReferralEarnings.toFixed(2)}</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs font-black bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/30">
+                  <span>ড্যাশবোর্ড</span>
+                  <i className="fas fa-arrow-right text-[9px]"></i>
                 </div>
               </div>
 
@@ -7878,7 +7950,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* SUB TAB: REFERRAL & 5% COMMISSION MANAGEMENT */}
+              {/* SUB TAB: REFERRAL & COMMISSION MANAGEMENT */}
               {adminSubTab === 'referrals' && (
                 <div className="space-y-5">
                   {/* Referral Header Banner */}
@@ -7889,13 +7961,13 @@ export default function App() {
                       </div>
                       <div>
                         <h3 className="font-black text-sm text-white flex items-center gap-2">
-                          <span>Referral Bonus System (রেফারেল ও ৫% বোনাস)</span>
+                          <span>Referral Bonus System (রেফারেল ও ডিপোজিট বোনাস কন্ট্রোল)</span>
                           <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-500/30">
                             {referralConfig.enabled ? 'ACTIVE ⚡' : 'DISABLED'}
                           </span>
                         </h3>
                         <p className="text-[10px] text-amber-200/80">
-                          রেফারেল ইউজার ডিপোজিট করলে ইনভাইটার স্বয়ংক্রিয়ভাবে {referralConfig.bonusPercent || 5}% বোনাস পাবে
+                          রেফারেল লিংক দিয়ে যুক্ত ইউজার যেকোনো পরিমাণ ডিপোজিট করলে ইনভাইটার স্বয়ংক্রিয়ভাবে {referralConfig.bonusPercent || 10}% কমিশন পাবে
                         </p>
                       </div>
                     </div>
@@ -7908,19 +7980,80 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Settings Control Card */}
+                  {/* Settings Control Cards */}
                   <div className="glass-card p-4 space-y-4 border border-amber-500/20">
                     <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-2">
                       <i className="fas fa-sliders text-amber-400"></i>
                       <span>Referral System Configuration (কনফিগারেশন)</span>
                     </h4>
 
+                    {/* 1. Referral Website Link Control */}
+                    <div className="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-xs font-black text-white flex items-center gap-1.5">
+                          <i className="fas fa-globe text-cyan-400"></i>
+                          <span>Referral Website Base URL (রেফারেল ওয়েবসাইটের মূল লিংক)</span>
+                        </label>
+                        <span className="text-[10px] text-amber-300 font-mono">
+                          {referralConfig.websiteUrl || window.location.origin}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        এডমিন প্যানেল থেকে আপনার কাস্টম ডোমেইন বা ওয়েবসাইটের লিংক দিন (যেমন: https://yourdomain.com)। ইউজারের রেফারেল লিংক এই লিংকের সাথে <code className="text-amber-300">?ref=username</code> আকারে তৈরি হবে।
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="url"
+                          className="input-modern text-xs font-mono text-cyan-300 flex-1"
+                          placeholder={window.location.origin}
+                          value={referralConfig.websiteUrl || ''}
+                          onChange={(e) => {
+                            setReferralConfig((prev) => ({ ...prev, websiteUrl: e.target.value }));
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            setReferralConfig((prev) => ({ ...prev, websiteUrl: window.location.origin }));
+                            showToast('Current site origin inserted!', 'info');
+                          }}
+                          type="button"
+                          className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-white/10 transition whitespace-nowrap"
+                        >
+                          <i className="fas fa-crosshairs mr-1 text-cyan-400"></i> Use Current URL
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setAdminSavingReferralConfig(true);
+                              const cleanUrl = (referralConfig.websiteUrl || '').trim();
+                              await setDoc(doc(db, 'settings', 'referral_config'), {
+                                ...referralConfig,
+                                websiteUrl: cleanUrl
+                              }, { merge: true });
+                              showToast('✅ Referral Website URL saved successfully!', 'success');
+                              haptic('success');
+                            } catch (e: any) {
+                              showToast('Error saving URL: ' + e.message, 'error');
+                            } finally {
+                              setAdminSavingReferralConfig(false);
+                            }
+                          }}
+                          disabled={adminSavingReferralConfig}
+                          type="button"
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl shadow transition whitespace-nowrap"
+                        >
+                          {adminSavingReferralConfig ? <span className="loading-spinner"></span> : <span><i className="fas fa-save mr-1"></i> Save URL</span>}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* 2. System Active Status */}
                       <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
                         <label className="text-xs font-extrabold text-white flex items-center justify-between">
                           <span>System Active Status</span>
-                          <span className={referralConfig.enabled ? 'text-emerald-400' : 'text-red-400'}>
-                            {referralConfig.enabled ? 'Enabled' : 'Disabled'}
+                          <span className={referralConfig.enabled ? 'text-emerald-400 font-black' : 'text-red-400 font-black'}>
+                            {referralConfig.enabled ? 'Enabled ⚡' : 'Disabled ⛔'}
                           </span>
                         </label>
                         <p className="text-[10px] text-slate-400">Enable or pause automatic referral commission payout on deposit approval.</p>
@@ -7939,7 +8072,7 @@ export default function App() {
                               showToast('Error updating status: ' + e.message, 'error');
                             }
                           }}
-                          className={`w-full py-2 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 ${
+                          className={`w-full py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 ${
                             referralConfig.enabled
                               ? 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
                               : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
@@ -7950,12 +8083,32 @@ export default function App() {
                         </button>
                       </div>
 
+                      {/* 3. Commission Percentage */}
                       <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
                         <label className="text-xs font-extrabold text-white flex items-center justify-between">
                           <span>Commission Percentage (% বোনাস হার)</span>
-                          <span className="text-amber-400 font-mono font-bold">{referralConfig.bonusPercent}%</span>
+                          <span className="text-amber-400 font-mono font-bold text-sm">{referralConfig.bonusPercent}%</span>
                         </label>
-                        <p className="text-[10px] text-slate-400">Default is 5% bonus for every deposit approved by admin.</p>
+                        <p className="text-[10px] text-slate-400">যেকোনো ডিপোজিট অনুমোদনের পর ইনভাইটার এই হারে কমিশন পাবে।</p>
+                        
+                        {/* Preset Quick Chips */}
+                        <div className="flex gap-1.5 mb-1">
+                          {[5, 10, 15, 20].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => setReferralConfig((prev) => ({ ...prev, bonusPercent: pct }))}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition border ${
+                                referralConfig.bonusPercent === pct
+                                  ? 'bg-amber-500 text-black border-amber-400 shadow'
+                                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                              }`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+
                         <div className="flex gap-2">
                           <input
                             type="number"
@@ -7973,9 +8126,9 @@ export default function App() {
                               try {
                                 await setDoc(doc(db, 'settings', 'referral_config'), {
                                   ...referralConfig,
-                                  bonusPercent: referralConfig.bonusPercent || 5
+                                  bonusPercent: referralConfig.bonusPercent || 10
                                 }, { merge: true });
-                                showToast(`Referral bonus set to ${referralConfig.bonusPercent}%!`, 'success');
+                                showToast(`✅ Referral bonus set to ${referralConfig.bonusPercent}%!`, 'success');
                                 haptic('success');
                               } catch (e: any) {
                                 showToast('Error: ' + e.message, 'error');
@@ -8019,7 +8172,7 @@ export default function App() {
                         <i className="fas fa-history text-amber-400"></i>
                         <span>Referral Commission Logs ({allReferralCommissions.length})</span>
                       </h4>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold">Auto-calculated 5% on approval</span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold">Auto-credited on deposit approval</span>
                     </div>
 
                     {allReferralCommissions.length === 0 ? (
@@ -8027,7 +8180,7 @@ export default function App() {
                         <i className="fas fa-gift text-3xl mb-2 opacity-40"></i>
                         <p className="text-xs">No referral commission payouts recorded yet.</p>
                         <p className="text-[10px] text-slate-600 mt-1">
-                          When users deposit and admin approves, 5% bonus will appear here.
+                          When users deposit and admin approves, referral bonus will automatically show here.
                         </p>
                       </div>
                     ) : (
@@ -8039,7 +8192,7 @@ export default function App() {
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-black text-xs shadow-inner">
-                                +5%
+                                +{comm.bonusPercent || 10}%
                               </div>
                               <div>
                                 <div className="flex items-center gap-1.5">
@@ -8435,7 +8588,297 @@ export default function App() {
             </div>
           )}
 
-          {/* LIVE ORDERS MODAL */}
+          {/* REFERRAL PROGRAM MODAL */}
+          {showReferralModal && (
+            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
+              <div className="bg-[#080d1a] border border-amber-500/40 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_60px_rgba(245,158,11,0.3)] w-full max-w-lg mx-auto">
+                {/* Modal Header */}
+                <div className="p-4 border-b border-amber-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 via-amber-950/40 to-slate-900">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/25 border border-amber-500/40 flex items-center justify-center text-amber-300 shadow-inner">
+                      <i className="fas fa-hand-holding-dollar text-base animate-bounce"></i>
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
+                        <span>Referral Program (রেফারেল প্রোগ্রাম)</span>
+                        <span className="bg-emerald-500 text-black text-[9px] font-black px-2 py-0.5 rounded-full">
+                          {referralConfig.bonusPercent || 10}% BONUS
+                        </span>
+                      </h3>
+                      <p className="text-[10px] text-amber-200/80">যেকোনো ডিপোজিটে {referralConfig.bonusPercent || 10}% অটোমেটিক ক্যাশ কমিশন</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowReferralModal(false);
+                      haptic('light');
+                    }}
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-90"
+                  >
+                    <i className="fas fa-times text-xs"></i>
+                  </button>
+                </div>
+
+                {/* Modal Scrollable Body */}
+                <div className="p-4 overflow-y-auto space-y-4 text-xs">
+                  {/* Hero Metric Cards (3-Grid) */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-gradient-to-br from-slate-900 to-amber-950/40 border border-amber-500/30 p-3 rounded-2xl text-center shadow">
+                      <span className="text-[10px] text-slate-400 font-bold block mb-1">মোট রেফার</span>
+                      <span className="text-base font-black text-amber-300 font-mono">
+                        {userTotalReferrals} <span className="text-[10px] text-slate-400">জন</span>
+                      </span>
+                    </div>
+                    <div className="bg-gradient-to-br from-slate-900 to-emerald-950/40 border border-emerald-500/30 p-3 rounded-2xl text-center shadow">
+                      <span className="text-[10px] text-slate-400 font-bold block mb-1">মোট বোনাস</span>
+                      <span className="text-base font-black text-emerald-400 font-mono">
+                        ৳{userReferralEarnings.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="bg-gradient-to-br from-slate-900 to-cyan-950/40 border border-cyan-500/30 p-3 rounded-2xl text-center shadow">
+                      <span className="text-[10px] text-slate-400 font-bold block mb-1">কমিশন রেট</span>
+                      <span className="text-base font-black text-cyan-300 font-mono">
+                        {referralConfig.bonusPercent || 10}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Referral Link Card */}
+                  {(() => {
+                    const userRefCode = currentUser?.username || currentUser?.uid || '';
+                    const siteBase = (referralConfig.websiteUrl && referralConfig.websiteUrl.trim())
+                      ? referralConfig.websiteUrl.trim().replace(/\/+$/, '')
+                      : window.location.origin;
+                    const fullReferralUrl = `${siteBase}?ref=${encodeURIComponent(userRefCode)}`;
+
+                    return (
+                      <div className="glass-card p-4 rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-500/10 via-slate-900/90 to-slate-950 space-y-3 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-extrabold text-amber-300 flex items-center gap-1.5">
+                            <i className="fas fa-link"></i>
+                            <span>আপনার ইউনিক রেফারেল লিংক (Share & Earn)</span>
+                          </label>
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-md font-bold">
+                            Live URL
+                          </span>
+                        </div>
+
+                        {/* Readonly Link Input */}
+                        <div className="flex items-center gap-2 bg-black/60 p-2 rounded-xl border border-white/10">
+                          <input
+                            type="text"
+                            readOnly
+                            value={fullReferralUrl}
+                            className="bg-transparent text-white font-mono text-[11px] flex-1 outline-none truncate select-all"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(fullReferralUrl);
+                              showToast('✅ রেফারেল লিংক কপি হয়েছে!', 'success');
+                              haptic('success');
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs shadow transition active:scale-95 flex items-center gap-1 shrink-0"
+                          >
+                            <i className="fas fa-copy"></i>
+                            <span>কপি</span>
+                          </button>
+                        </div>
+
+                        {/* Direct Social Share Buttons */}
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold block mb-2">সোশ্যাল মিডিয়ায় শেয়ার করুন:</span>
+                          <div className="grid grid-cols-4 gap-2">
+                            {/* Telegram */}
+                            <a
+                              href={`https://t.me/share/url?url=${encodeURIComponent(fullReferralUrl)}&text=${encodeURIComponent(`🔥 সেরা সোশ্যাল মিডিয়া মার্কেটিং সার্ভিস এবং ইনস্ট্যান্ট বোনাস পান: `)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => haptic('light')}
+                              className="py-2 px-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
+                            >
+                              <i className="fab fa-telegram text-base text-blue-400"></i>
+                              <span>Telegram</span>
+                            </a>
+
+                            {/* WhatsApp */}
+                            <a
+                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🔥 সেরা সোশ্যাল মিডিয়া মার্কেটিং সার্ভিস এবং ইনস্ট্যান্ট বোনাস পেতে জয়েন করুন: ${fullReferralUrl}`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => haptic('light')}
+                              className="py-2 px-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
+                            >
+                              <i className="fab fa-whatsapp text-base text-emerald-400"></i>
+                              <span>WhatsApp</span>
+                            </a>
+
+                            {/* Facebook */}
+                            <a
+                              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(fullReferralUrl)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => haptic('light')}
+                              className="py-2 px-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
+                            >
+                              <i className="fab fa-facebook text-base text-indigo-400"></i>
+                              <span>Facebook</span>
+                            </a>
+
+                            {/* Native Web Share */}
+                            <button
+                              onClick={() => {
+                                if (navigator.share) {
+                                  navigator.share({
+                                    title: 'RF SMM Panel',
+                                    text: `আমার রেফারেল লিংকে জয়েন করে পান ${referralConfig.bonusPercent || 10}% ডিপোজিট বোনাস!`,
+                                    url: fullReferralUrl,
+                                  }).catch(() => {});
+                                } else {
+                                  navigator.clipboard.writeText(fullReferralUrl);
+                                  showToast('✅ রেফারেল লিংক কপি হয়েছে!', 'success');
+                                }
+                                haptic('light');
+                              }}
+                              className="py-2 px-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition active:scale-95 text-center"
+                            >
+                              <i className="fas fa-share-nodes text-base text-purple-400"></i>
+                              <span>Share</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Referral Code Box */}
+                        <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold block">আপনার রেফারেল কোড:</span>
+                            <span className="font-mono font-black text-sm text-white">{userRefCode}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(userRefCode);
+                              showToast(`রেফারেল কোড "${userRefCode}" কপি হয়েছে!`, 'success');
+                              haptic('success');
+                            }}
+                            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-300 text-[10px] font-bold rounded-lg transition active:scale-95"
+                          >
+                            <i className="fas fa-copy mr-1"></i> কোড কপি
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* How It Works (সহজ ৩টি নিয়ম) */}
+                  <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-white/10 space-y-2.5">
+                    <h4 className="font-black text-xs text-white flex items-center gap-1.5">
+                      <i className="fas fa-circle-question text-amber-400"></i>
+                      <span>কীভাবে {referralConfig.bonusPercent || 10}% বোনাস পাবেন?</span>
+                    </h4>
+                    <div className="space-y-2 text-[11px] text-slate-300">
+                      <div className="flex items-start gap-2">
+                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                          ১
+                        </span>
+                        <p>
+                          <strong className="text-white">লিংক বা কোড শেয়ার করুন:</strong> আপনার ইউনিক রেফারেল লিংক কপি করে বন্ধুদের ফেসবুক, মেসেঞ্জার বা টেলিগ্রামে পাঠান।
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                          ২
+                        </span>
+                        <p>
+                          <strong className="text-white">বন্ধু সাইনআপ ও ডিপোজিট করবে:</strong> আপনার লিংক দিয়ে বন্ধু একাউন্ট খুলে বিকাশ, নগদ বা রকেটে যেকোনো পরিমাণ টাকা ডিপোজিট করবে।
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                          ৩
+                        </span>
+                        <p>
+                          <strong className="text-white">ইনস্ট্যান্ট {referralConfig.bonusPercent || 10}% ক্যাশ বোনাস:</strong> ডিপোজিট এপ্রুভ হওয়ার সাথে সাথে ডিপোজিট এমাউন্টের {referralConfig.bonusPercent || 10}% কমিশন অটোমেটিক আপনার মেইন ব্যালেন্সে যোগ হয়ে যাবে!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Realtime User Commission Logs */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-xs text-white flex items-center gap-1.5">
+                        <i className="fas fa-clock-rotate-left text-cyan-400"></i>
+                        <span>আপনার অর্জিত কমিশন হিস্ট্রি ({userReferralCommissions.length})</span>
+                      </h4>
+                      <span className="text-[10px] text-slate-400">Realtime Sync ⚡</span>
+                    </div>
+
+                    {userReferralCommissions.length === 0 ? (
+                      <div className="text-center py-6 px-4 rounded-2xl bg-slate-900/40 border border-dashed border-white/10 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto text-base">
+                          <i className="fas fa-gift"></i>
+                        </div>
+                        <p className="text-xs font-bold text-slate-300">এখনো কোনো রেফারেল বোনাস জমা হয়নি</p>
+                        <p className="text-[10px] text-slate-500 max-w-xs mx-auto">
+                          উপরে থাকা আপনার রেফারেল লিংক বন্ধুদের শেয়ার করুন এবং প্রতিটি ডিপোজিটে {referralConfig.bonusPercent || 10}% কমিশন আয় করুন!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {userReferralCommissions.map((comm) => (
+                          <div
+                            key={comm.id}
+                            className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 shadow"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                                ৳
+                              </div>
+                              <div>
+                                <span className="font-extrabold text-xs text-white block">
+                                  {comm.referredUsername || 'Referred Friend'}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  ডিপোজিট: ৳{comm.depositAmount} ({comm.bonusPercent || 10}% বোনাস)
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black text-emerald-400 font-mono block">
+                                +৳{(comm.commissionAmount || 0).toFixed(2)}
+                              </span>
+                              <span className="text-[9px] text-slate-500 font-mono">
+                                {comm.timestamp?.seconds
+                                  ? new Date(comm.timestamp.seconds * 1000).toLocaleDateString('en-BD', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })
+                                  : 'Recently'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-3 border-t border-white/10 bg-slate-950 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setShowReferralModal(false);
+                      haptic('light');
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition active:scale-95"
+                  >
+                    বন্ধ করুন (Close)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {showLiveOrdersModal && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
               <div className="bg-[#080d1a] border border-red-500/30 rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.25)] w-full max-w-lg mx-auto">
