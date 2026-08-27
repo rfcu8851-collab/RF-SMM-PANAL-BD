@@ -1,13 +1,9 @@
-Ôªøimport React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Live3DCanvas, ThreeDTheme, THEME_CONFIGS } from './components/Live3DCanvas';
 import { Welcome3DModal } from './components/Welcome3DModal';
 import {
   db,
   auth,
-  googleProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signOut,
   doc,
   collection,
@@ -380,10 +376,12 @@ export default function App() {
 
   const [regName, setRegName] = useState('');
   const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPass, setRegConfirmPass] = useState('');
   const [regNameErr, setRegNameErr] = useState('');
   const [regUserErr, setRegUserErr] = useState('');
+  const [regEmailErr, setRegEmailErr] = useState('');
   const [regPassErr, setRegPassErr] = useState('');
   const [regConfirmErr, setRegConfirmErr] = useState('');
 
@@ -394,8 +392,23 @@ export default function App() {
   const [userBalance, setUserBalance] = useState(0);
   const [userTotalOrders, setUserTotalOrders] = useState(0);
   const [userPhotoURL, setUserPhotoURL] = useState<string | null>(null);
+  
+  // Profile Name & Username Editing
   const [editUserName, setEditUserName] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [editUserUsername, setEditUserUsername] = useState('');
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [editUserUsernameErr, setEditUserUsernameErr] = useState('');
+
+  // Profile Change Password State
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmNewPasswordInput, setConfirmNewPasswordInput] = useState('');
+  const [changePassErr, setChangePassErr] = useState('');
+  const [changePassSuccess, setChangePassSuccess] = useState('');
+  const [changePassSubmitting, setChangePassSubmitting] = useState(false);
+
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
   // Check if current logged in user is admin (rashal117)
@@ -794,47 +807,6 @@ export default function App() {
 
     const initApp = async () => {
       try {
-        // Check if returning from Google redirect
-        try {
-          const redirectRes = await getRedirectResult(auth);
-          if (redirectRes && redirectRes.user) {
-            const gUser = redirectRes.user;
-            const email = (gUser.email || '').toLowerCase().trim();
-            const displayName = gUser.displayName || (email ? email.split('@')[0] : 'Google User');
-            const photoURL = gUser.photoURL || '';
-            const googleUid = gUser.uid;
-
-            let userDoc: any = null;
-            let userData: any = null;
-            const qGoogle = query(collection(db, 'auth_users'), where('googleUid', '==', googleUid));
-            const snapGoogle = await getDocs(qGoogle);
-            if (!snapGoogle.empty) {
-              userDoc = snapGoogle.docs[0];
-              userData = userDoc.data();
-            } else if (email) {
-              const qEmail = query(collection(db, 'auth_users'), where('email', '==', email));
-              const snapEmail = await getDocs(qEmail);
-              if (!snapEmail.empty) {
-                userDoc = snapEmail.docs[0];
-                userData = userDoc.data();
-              }
-            }
-
-            if (userDoc && userData) {
-              const session: UserSession = {
-                uid: userDoc.id,
-                username: userData.username,
-                name: userData.name,
-                email,
-                photoURL
-              };
-              currentUserSessionLogin(session);
-            }
-          }
-        } catch (redirErr) {
-          console.warn('Redirect check notice:', redirErr);
-        }
-
         const saved = localStorage.getItem('smm_session');
         if (saved) {
           const session = JSON.parse(saved);
@@ -1346,6 +1318,130 @@ export default function App() {
       showToast('Failed to update name', 'error');
     } finally {
       setProfileSubmitting(false);
+    }
+  };
+
+  // Update Username (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®)
+  const handleUpdateUserUsername = async () => {
+    if (!currentUser?.uid) return;
+    setEditUserUsernameErr('');
+    const newUsername = editUserUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+    if (!newUsername || newUsername.length < 3) {
+      setEditUserUsernameErr('‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶ï‡¶Æ‡¶™‡¶ï‡ßç‡¶∑‡ßá ‡ß© ‡¶Ö‡¶ï‡ßç‡¶∑‡¶∞‡ßá‡¶∞ ‡¶π‡¶§‡ßá ‡¶π‡¶¨‡ßá (letters, numbers, _)');
+      haptic('error');
+      return;
+    }
+    if (newUsername === currentUser.username?.toLowerCase()) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    try {
+      setProfileSubmitting(true);
+      haptic('light');
+
+      // Check if username is already taken by someone else
+      const qCheck = query(collection(db, 'auth_users'), where('username', '==', newUsername));
+      const snapCheck = await getDocs(qCheck);
+      const isTaken = snapCheck.docs.some((d) => d.id !== currentUser.uid);
+
+      if (isTaken) {
+        setEditUserUsernameErr('‡¶è‡¶á ‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ‡¶ü‡¶ø ‡¶Ö‡¶®‡ßç‡¶Ø ‡¶ï‡ßá‡¶â ‡¶¨‡ßç‡¶Ø‡¶¨‡¶π‡¶æ‡¶∞ ‡¶ï‡¶∞‡¶õ‡ßá! ‡¶Ö‡¶®‡ßç‡¶Ø ‡¶®‡¶æ‡¶Æ ‡¶®‡¶ø‡¶∞‡ßç‡¶¨‡¶æ‡¶ö‡¶® ‡¶ï‡¶∞‡ßÅ‡¶®‡•§');
+        haptic('error');
+        return;
+      }
+
+      // Update in users collection
+      const userRef = doc(db, 'users', currentUser.uid);
+      await setDoc(userRef, { username: newUsername }, { merge: true });
+
+      // Update in auth_users collection
+      const authUserRef = doc(db, 'auth_users', currentUser.uid);
+      await setDoc(authUserRef, { username: newUsername }, { merge: true });
+
+      const updatedUser = { ...currentUser, username: newUsername };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('smm_session', JSON.stringify(updatedUser));
+
+      setIsEditingUsername(false);
+      showToast('‚úÖ ‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶∏‡¶´‡¶≤‡¶≠‡¶æ‡¶¨‡ßá ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶ø‡¶§ ‡¶π‡ßü‡ßá‡¶õ‡ßá!', 'success');
+      haptic('success');
+    } catch (err: any) {
+      console.error('Error updating username:', err);
+      setEditUserUsernameErr('‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®‡ßá ‡¶∏‡¶Æ‡¶∏‡ßç‡¶Ø‡¶æ: ' + (err.message || 'Error'));
+      haptic('error');
+    } finally {
+      setProfileSubmitting(false);
+    }
+  };
+
+  // Change Password (‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®)
+  const handleChangePassword = async () => {
+    if (!currentUser?.uid) return;
+    setChangePassErr('');
+    setChangePassSuccess('');
+
+    if (!currentPasswordInput) {
+      setChangePassErr('‡¶¨‡¶∞‡ßç‡¶§‡¶Æ‡¶æ‡¶® ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶≤‡¶ø‡¶ñ‡ßÅ‡¶® (Current password required)');
+      haptic('error');
+      return;
+    }
+    if (!newPasswordInput || newPasswordInput.length < 6) {
+      setChangePassErr('‡¶®‡¶§‡ßÅ‡¶® ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶ï‡¶Æ‡¶™‡¶ï‡ßç‡¶∑‡ßá ‡ß¨ ‡¶Ö‡¶ï‡ßç‡¶∑‡¶∞‡ßá‡¶∞ ‡¶π‡¶§‡ßá ‡¶π‡¶¨‡ßá (Min 6 chars)');
+      haptic('error');
+      return;
+    }
+    if (newPasswordInput !== confirmNewPasswordInput) {
+      setChangePassErr('‡¶®‡¶§‡ßÅ‡¶® ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶¶‡ßÅ‡¶ü‡¶ø ‡¶Æ‡¶ø‡¶≤‡¶õ‡ßá ‡¶®‡¶æ (Passwords do not match)');
+      haptic('error');
+      return;
+    }
+
+    try {
+      setChangePassSubmitting(true);
+      haptic('light');
+
+      const authUserRef = doc(db, 'auth_users', currentUser.uid);
+      const authSnap = await getDoc(authUserRef);
+
+      if (!authSnap.exists()) {
+        setChangePassErr('‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶è‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶™‡¶æ‡¶ì‡ßü‡¶æ ‡¶Ø‡¶æ‡ßü‡¶®‡¶ø');
+        haptic('error');
+        return;
+      }
+
+      const authData = authSnap.data();
+      const hashedCurrent = await simpleHash(currentPasswordInput);
+
+      if (authData.password && authData.password !== hashedCurrent) {
+        setChangePassErr('‡¶¨‡¶∞‡ßç‡¶§‡¶Æ‡¶æ‡¶® ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶°‡¶ü‡¶ø ‡¶∏‡¶†‡¶ø‡¶ï ‡¶®‡ßü (Incorrect current password)');
+        haptic('error');
+        return;
+      }
+
+      const hashedNew = await simpleHash(newPasswordInput);
+      await updateDoc(authUserRef, {
+        password: hashedNew,
+        passwordUpdatedAt: serverTimestamp()
+      });
+
+      setChangePassSuccess('‚úÖ ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶∏‡¶´‡¶≤‡¶≠‡¶æ‡¶¨‡ßá ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶ø‡¶§ ‡¶π‡ßü‡ßá‡¶õ‡ßá!');
+      showToast('‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶∏‡¶´‡¶≤‡¶≠‡¶æ‡¶¨‡ßá ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶ø‡¶§ ‡¶π‡ßü‡ßá‡¶õ‡ßá! üîí', 'success');
+      haptic('success');
+      setCurrentPasswordInput('');
+      setNewPasswordInput('');
+      setConfirmNewPasswordInput('');
+      setTimeout(() => {
+        setShowChangePassModal(false);
+        setChangePassSuccess('');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Error changing password:', err);
+      setChangePassErr('‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®‡ßá ‡¶∏‡¶Æ‡¶∏‡ßç‡¶Ø‡¶æ: ' + (err.message || 'Error'));
+      haptic('error');
+    } finally {
+      setChangePassSubmitting(false);
     }
   };
 
@@ -2202,19 +2298,20 @@ export default function App() {
     }
   };
 
-  // Handler: Login
+  // Handler: Login (Username or Gmail/Email)
   const handleLogin = async () => {
     if (authSubmitting) return;
     setLoginUserErr('');
     setLoginPassErr('');
 
+    const identifier = loginUsername.trim().toLowerCase();
     let err = false;
-    if (!loginUsername.trim()) {
-      setLoginUserErr('Username is required');
+    if (!identifier) {
+      setLoginUserErr('Username or Email is required (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶¨‡¶æ ‡¶ú‡¶ø‡¶Æ‡ßá‡¶á‡¶≤ ‡¶≤‡¶ø‡¶ñ‡ßÅ‡¶®)');
       err = true;
     }
     if (!loginPassword) {
-      setLoginPassErr('Password is required');
+      setLoginPassErr('Password is required (‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶≤‡¶ø‡¶ñ‡ßÅ‡¶®)');
       err = true;
     }
     if (err) {
@@ -2226,33 +2323,57 @@ export default function App() {
     haptic('heavy');
 
     try {
+      let userDoc: any = null;
+      let userData: any = null;
+
+      // 1. Try finding by username
       const qUser = query(
         collection(db, 'auth_users'),
-        where('username', '==', loginUsername.trim().toLowerCase())
+        where('username', '==', identifier)
       );
-      const snap = await getDocs(qUser);
+      const snapUser = await getDocs(qUser);
 
-      if (snap.empty) {
-        setLoginUserErr('Account not found. Please register first.');
+      if (!snapUser.empty) {
+        userDoc = snapUser.docs[0];
+        userData = userDoc.data();
+      } else {
+        // 2. Try finding by email
+        const qEmail = query(
+          collection(db, 'auth_users'),
+          where('email', '==', identifier)
+        );
+        const snapEmail = await getDocs(qEmail);
+        if (!snapEmail.empty) {
+          userDoc = snapEmail.docs[0];
+          userData = userDoc.data();
+        }
+      }
+
+      if (!userDoc || !userData) {
+        setLoginUserErr('Account not found with this username or email. (‡¶è‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶™‡¶æ‡¶ì‡ßü‡¶æ ‡¶Ø‡¶æ‡ßü‡¶®‡¶ø)');
         haptic('error');
         setAuthSubmitting(false);
         return;
       }
 
-      const userDoc = snap.docs[0];
-      const userData = userDoc.data();
       const hashedPass = await simpleHash(loginPassword);
 
       if (userData.password !== hashedPass) {
-        setLoginPassErr('Incorrect password');
+        setLoginPassErr('Incorrect password (‡¶≠‡ßÅ‡¶≤ ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶°)');
         haptic('error');
         setAuthSubmitting(false);
         return;
       }
 
-      const session = { uid: userDoc.id, username: userData.username, name: userData.name };
+      const session: UserSession = {
+        uid: userDoc.id,
+        username: userData.username,
+        name: userData.name,
+        email: userData.email || '',
+        photoURL: userData.photoURL || ''
+      };
       currentUserSessionLogin(session);
-      showToast(`Welcome back, ${userData.name}!`, 'success');
+      showToast(`Welcome back, ${userData.name}! üéâ`, 'success');
     } catch (e: any) {
       console.error('Login error:', e);
       haptic('error');
@@ -2262,16 +2383,18 @@ export default function App() {
     }
   };
 
-  // Handler: Register
+  // Handler: Register (with required Gmail / Email)
   const handleRegister = async () => {
     if (authSubmitting) return;
     setRegNameErr('');
     setRegUserErr('');
+    setRegEmailErr('');
     setRegPassErr('');
     setRegConfirmErr('');
 
     const name = regName.trim();
     const username = regUsername.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const email = regEmail.trim().toLowerCase();
     const password = regPassword;
     const confirm = regConfirmPass;
 
@@ -2281,7 +2404,15 @@ export default function App() {
       err = true;
     }
     if (!username || username.length < 3) {
-      setRegUserErr('Username required (min 3 chars, letters/numbers)');
+      setRegUserErr('Username required (min 3 chars, letters/numbers/_)');
+      err = true;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setRegEmailErr('Gmail / Email is required (‡¶ú‡¶ø‡¶Æ‡ßá‡¶á‡¶≤ ‡¶¶‡ßá‡¶ì‡¶Ø‡¶º‡¶æ ‡¶Ü‡¶¨‡¶∂‡ßç‡¶Ø‡¶ï)');
+      err = true;
+    } else if (!emailRegex.test(email)) {
+      setRegEmailErr('Please enter a valid email address (‡¶∏‡¶†‡¶ø‡¶ï ‡¶á‡¶Æ‡ßá‡¶á‡¶≤ ‡¶≤‡¶ø‡¶ñ‡ßÅ‡¶®)');
       err = true;
     }
     if (!password || password.length < 6) {
@@ -2289,7 +2420,7 @@ export default function App() {
       err = true;
     }
     if (password !== confirm) {
-      setRegConfirmErr('Passwords do not match');
+      setRegConfirmErr('Passwords do not match (‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶Æ‡¶ø‡¶≤‡¶õ‡ßá ‡¶®‡¶æ)');
       err = true;
     }
     if (err) {
@@ -2301,10 +2432,21 @@ export default function App() {
     haptic('heavy');
 
     try {
+      // 1. Check if username is already taken
       const qUser = query(collection(db, 'auth_users'), where('username', '==', username));
-      const existing = await getDocs(qUser);
-      if (!existing.empty) {
-        setRegUserErr('This username is already taken');
+      const existingUser = await getDocs(qUser);
+      if (!existingUser.empty) {
+        setRegUserErr('This username is already taken (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ‡¶ü‡¶ø ‡¶™‡ßÇ‡¶∞‡ßç‡¶¨‡ßá ‡¶¨‡ßç‡¶Ø‡¶¨‡¶π‡ßÉ‡¶§)');
+        haptic('error');
+        setAuthSubmitting(false);
+        return;
+      }
+
+      // 2. Check if email is already taken
+      const qEmail = query(collection(db, 'auth_users'), where('email', '==', email));
+      const existingEmail = await getDocs(qEmail);
+      if (!existingEmail.empty) {
+        setRegEmailErr('An account with this email already exists (‡¶è‡¶á ‡¶ú‡¶ø‡¶Æ‡ßá‡¶á‡¶≤ ‡¶¶‡¶ø‡ßü‡ßá ‡¶™‡ßÇ‡¶∞‡ßç‡¶¨‡ßá ‡¶è‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶ñ‡ßã‡¶≤‡¶æ ‡¶π‡ßü‡ßá‡¶õ‡ßá)');
         haptic('error');
         setAuthSubmitting(false);
         return;
@@ -2317,7 +2459,7 @@ export default function App() {
       // Check referral code
       let referrerUid: string | null = null;
       let referrerUsername: string | null = null;
-      const refInput = regReferralCode.trim().toLowerCase();
+      const refInput = (regReferralCode || localStorage.getItem('smm_referral_ref') || '').trim().toLowerCase();
       if (refInput) {
         try {
           const qRef = query(collection(db, 'auth_users'), where('username', '==', refInput));
@@ -2341,6 +2483,7 @@ export default function App() {
       await setDoc(newDoc, {
         username,
         name,
+        email,
         password: hashedPass,
         createdAt: serverTimestamp(),
         telegramId: tg?.initDataUnsafe?.user?.id || null,
@@ -2351,6 +2494,7 @@ export default function App() {
       await setDoc(doc(db, 'users', uid), {
         name,
         username,
+        email,
         balance: 0,
         total_orders: 0,
         totalReferrals: 0,
@@ -2385,203 +2529,15 @@ export default function App() {
         }
       }
 
-      const session = { uid, username, name };
+      const session: UserSession = { uid, username, name, email };
       currentUserSessionLogin(session);
-      showToast('Account created successfully!', 'success');
+      showToast('Account created successfully! üéâ', 'success');
     } catch (e: any) {
       console.error('Registration error:', e);
       haptic('error');
       showToast('Registration failed.', 'error');
     } finally {
       setAuthSubmitting(false);
-    }
-  };
-
-  // Google / Gmail Auto 1-Click Login
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  const loginWithGoogle = async () => {
-    if (googleLoading || authSubmitting) return;
-    setGoogleLoading(true);
-    haptic('heavy');
-    try {
-      let result = null;
-      try {
-        result = await signInWithPopup(auth, googleProvider);
-      } catch (popupErr: any) {
-        console.warn('Popup sign in failed, trying redirect:', popupErr);
-        if (
-          popupErr?.code === 'auth/popup-blocked' ||
-          popupErr?.code === 'auth/popup-closed-by-user' ||
-          popupErr?.code === 'auth/cancelled-popup-request'
-        ) {
-          try {
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          } catch (rErr) {
-            console.error('Redirect err:', rErr);
-          }
-        }
-        throw popupErr;
-      }
-
-      if (!result || !result.user) {
-        setGoogleLoading(false);
-        return;
-      }
-
-      const gUser = result.user;
-      const email = (gUser.email || '').toLowerCase().trim();
-      const displayName = gUser.displayName || (email ? email.split('@')[0] : 'Google User');
-      const photoURL = gUser.photoURL || '';
-      const googleUid = gUser.uid;
-
-      // Base username from email or display name
-      let baseUsername = (email ? email.split('@')[0] : displayName)
-        .toLowerCase()
-        .replace(/[^a-z0-9_]/g, '');
-      if (baseUsername.length < 3) baseUsername = `user_${googleUid.slice(0, 6).toLowerCase()}`;
-
-      // Check existing user in auth_users
-      let userDoc: any = null;
-      let userData: any = null;
-
-      // Check by googleUid
-      const qGoogle = query(collection(db, 'auth_users'), where('googleUid', '==', googleUid));
-      const snapGoogle = await getDocs(qGoogle);
-      if (!snapGoogle.empty) {
-        userDoc = snapGoogle.docs[0];
-        userData = userDoc.data();
-      } else if (email) {
-        // Check by email
-        const qEmail = query(collection(db, 'auth_users'), where('email', '==', email));
-        const snapEmail = await getDocs(qEmail);
-        if (!snapEmail.empty) {
-          userDoc = snapEmail.docs[0];
-          userData = userDoc.data();
-          await updateDoc(doc(db, 'auth_users', userDoc.id), {
-            googleUid,
-            photoURL: photoURL || userData.photoURL || '',
-            authProvider: 'google'
-          });
-        }
-      }
-
-      if (userDoc && userData) {
-        // Existing user found
-        const session: UserSession = {
-          uid: userDoc.id,
-          username: userData.username || baseUsername,
-          name: userData.name || displayName,
-          email,
-          photoURL: photoURL || userData.photoURL || ''
-        };
-        currentUserSessionLogin(session);
-        showToast(`‡¶∏‡ßç‡¶¨‡¶æ‡¶ó‡¶§‡¶Æ, ${session.name}! üéâ`, 'success');
-      } else {
-        // New user auto-registration
-        let finalUsername = baseUsername;
-        const qCheck = query(collection(db, 'auth_users'), where('username', '==', finalUsername));
-        const snapCheck = await getDocs(qCheck);
-        if (!snapCheck.empty) {
-          finalUsername = `${baseUsername}_${Math.floor(100 + Math.random() * 900)}`;
-        }
-
-        const newDoc = doc(collection(db, 'auth_users'));
-        const uid = newDoc.id;
-
-        // Check referral
-        let referrerUid: string | null = null;
-        let referrerUsername: string | null = null;
-        const refInput = (regReferralCode || localStorage.getItem('smm_referral_ref') || '').trim().toLowerCase();
-        if (refInput) {
-          try {
-            const qRef = query(collection(db, 'auth_users'), where('username', '==', refInput));
-            const refSnap = await getDocs(qRef);
-            if (!refSnap.empty) {
-              referrerUid = refSnap.docs[0].id;
-              referrerUsername = refSnap.docs[0].data().username || refInput;
-            }
-          } catch (rErr) {
-            console.error('Google Referral lookup error:', rErr);
-          }
-        }
-
-        await setDoc(newDoc, {
-          username: finalUsername,
-          name: displayName,
-          email,
-          photoURL,
-          googleUid,
-          password: '',
-          authProvider: 'google',
-          createdAt: serverTimestamp(),
-          referredBy: referrerUid,
-          referredByUsername: referrerUsername
-        });
-
-        await setDoc(
-          doc(db, 'users', uid),
-          {
-            name: displayName,
-            username: finalUsername,
-            email,
-            photoURL,
-            balance: 0,
-            total_orders: 0,
-            totalReferrals: 0,
-            totalReferralEarnings: 0,
-            referredBy: referrerUid,
-            referredByUsername: referrerUsername,
-            createdAt: serverTimestamp()
-          },
-          { merge: true }
-        );
-
-        if (referrerUid) {
-          try {
-            const refUserRef = doc(db, 'users', referrerUid);
-            const refSnap = await getDoc(refUserRef);
-            if (refSnap.exists()) {
-              const currentTotalRefs = refSnap.data().totalReferrals || 0;
-              await updateDoc(refUserRef, {
-                totalReferrals: currentTotalRefs + 1
-              });
-
-              await addDoc(collection(db, 'user_notifications'), {
-                uid: referrerUid,
-                title: 'üë• ‡¶®‡¶§‡ßÅ‡¶® ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶Æ‡ßá‡¶Æ‡ßç‡¶¨‡¶æ‡¶∞ ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßá‡¶õ‡ßá!',
-                message: `@${finalUsername} (${displayName}) ‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶≤‡¶ø‡¶Ç‡¶ï‡ßá‡¶∞ ‡¶Æ‡¶æ‡¶ß‡ßç‡¶Ø‡¶Æ‡ßá Gmail ‡¶¶‡¶ø‡ßü‡ßá ‡¶ú‡ßü‡ßá‡¶® ‡¶ï‡¶∞‡ßá‡¶õ‡ßá! ‡ß´% ‡¶≤‡¶æ‡¶á‡¶´‡¶ü‡¶æ‡¶á‡¶Æ ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶â‡¶™‡¶≠‡ßã‡¶ó ‡¶ï‡¶∞‡ßÅ‡¶®‡•§`,
-                type: 'promo',
-                timestamp: serverTimestamp(),
-                unread: true
-              });
-            }
-          } catch (e) {}
-        }
-
-        const session: UserSession = {
-          uid,
-          username: finalUsername,
-          name: displayName,
-          email,
-          photoURL
-        };
-        currentUserSessionLogin(session);
-        showToast('Gmail ‡¶¶‡¶ø‡ßü‡ßá ‡¶∏‡¶´‡¶≤‡¶≠‡¶æ‡¶¨‡ßá ‡¶Ö‡ßç‡¶Ø‡¶æ‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü ‡¶ö‡¶æ‡¶≤‡ßÅ ‡¶π‡ßü‡ßá‡¶õ‡ßá! üöÄ', 'success');
-      }
-    } catch (e: any) {
-      console.error('Google Login error:', e);
-      haptic('error');
-      if (e?.code === 'auth/popup-closed-by-user') {
-        showToast('Google ‡¶≤‡¶ó‡¶á‡¶® ‡¶â‡¶á‡¶®‡ßç‡¶°‡ßã ‡¶¨‡¶®‡ßç‡¶ß ‡¶ï‡¶∞‡¶æ ‡¶π‡ßü‡ßá‡¶õ‡ßá', 'warning');
-      } else if (e?.code === 'auth/network-request-failed') {
-        showToast('‡¶á‡¶®‡ßç‡¶ü‡¶æ‡¶∞‡¶®‡ßá‡¶ü ‡¶∏‡¶Ç‡¶Ø‡ßã‡¶ó ‡¶ö‡ßá‡¶ï ‡¶ï‡¶∞‡ßÅ‡¶®', 'error');
-      } else {
-        showToast('Google ‡¶∏‡¶æ‡¶á‡¶® ‡¶á‡¶® ‡¶¨‡ßç‡¶Ø‡¶∞‡ßç‡¶• ‡¶π‡ßü‡ßá‡¶õ‡ßá‡•§ ‡¶Ü‡¶¨‡¶æ‡¶∞ ‡¶ö‡ßá‡¶∑‡ßç‡¶ü‡¶æ ‡¶ï‡¶∞‡ßÅ‡¶®‡•§', 'error');
-      }
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -3489,30 +3445,45 @@ export default function App() {
             {authTab === 'login' ? (
               <div>
                 <div className="mb-3">
-                  <label className="form-label">Username</label>
-                  <input
-                    type="text"
-                    className="auth-input"
-                    placeholder="Enter your username"
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                  />
+                  <label className="form-label flex items-center justify-between">
+                    <span>Username or Gmail / Email</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶¨‡¶æ ‡¶ú‡¶ø‡¶Æ‡ßá‡¶á‡¶≤</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="auth-input pl-9"
+                      placeholder="e.g. username or user@gmail.com"
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    />
+                    <i className="fas fa-user-circle absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {loginUserErr && <p className="auth-error show">{loginUserErr}</p>}
                 </div>
-                <div className="mb-4">
-                  <label className="form-label">Password</label>
-                  <input
-                    type="password"
-                    className="auth-input"
-                    placeholder="Enter your password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  />
+
+                <div className="mb-5">
+                  <label className="form-label flex items-center justify-between">
+                    <span>Password</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶°</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      className="auth-input pl-9"
+                      placeholder="Enter your password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    />
+                    <i className="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {loginPassErr && <p className="auth-error show">{loginPassErr}</p>}
                 </div>
+
                 <button
-                  className="btn-primary-solid flex items-center justify-center gap-2"
+                  className="btn-primary-solid flex items-center justify-center gap-2 w-full py-3"
                   onClick={handleLogin}
                   disabled={authSubmitting}
                 >
@@ -3521,134 +3492,112 @@ export default function App() {
                   ) : (
                     <>
                       <i className="fas fa-sign-in-alt text-xs"></i>
-                      <span>LOGIN</span>
-                    </>
-                  )}
-                </button>
-                <div className="auth-divider">OR</div>
-                <button
-                  type="button"
-                  className="auth-google-btn"
-                  onClick={loginWithGoogle}
-                  disabled={googleLoading || authSubmitting}
-                >
-                  {googleLoading ? (
-                    <span className="loading-spinner"></span>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        />
-                      </svg>
-                      <span className="text-white font-extrabold tracking-wide">Sign in with Google</span>
+                      <span className="font-extrabold tracking-wider">LOGIN / ‡¶≤‡¶ó‡¶á‡¶®</span>
                     </>
                   )}
                 </button>
               </div>
             ) : (
               <div>
-                {/* 1-Click Fast Google Sign Up */}
-                <button
-                  type="button"
-                  className="auth-google-btn mb-4 shadow-[0_0_20px_rgba(66,133,244,0.25)] border-blue-500/40 hover:border-blue-400 bg-gradient-to-r from-blue-950/40 via-slate-900/60 to-indigo-950/40"
-                  onClick={loginWithGoogle}
-                  disabled={googleLoading || authSubmitting}
-                >
-                  {googleLoading ? (
-                    <span className="loading-spinner"></span>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        />
-                      </svg>
-                      <span className="text-white font-extrabold tracking-wide text-sm">
-                        Sign Up with Google
-                      </span>
-                    </>
-                  )}
-                </button>
-
-                <div className="auth-divider mb-4">OR REGISTER WITH FORM</div>
-
                 <div className="mb-3">
-                  <label className="form-label">Full Name</label>
-                  <input
-                    type="text"
-                    className="auth-input"
-                    placeholder="Your full name"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                  />
+                  <label className="form-label flex items-center justify-between">
+                    <span>Full Name</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶∏‡¶Æ‡ßç‡¶™‡ßÇ‡¶∞‡ßç‡¶£ ‡¶®‡¶æ‡¶Æ</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="auth-input pl-9"
+                      placeholder="Your full name (‡¶Ø‡ßá‡¶Æ‡¶®: ‡¶Æ‡ßã‡¶É ‡¶∞‡¶æ‡¶π‡ßÅ‡¶≤)"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                    />
+                    <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {regNameErr && <p className="auth-error show">{regNameErr}</p>}
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Username</label>
-                  <input
-                    type="text"
-                    className="auth-input"
-                    placeholder="Choose a username"
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
-                  />
+                  <label className="form-label flex items-center justify-between">
+                    <span>Username</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ (‡¶á‡¶â‡¶®‡¶ø‡¶ï)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="auth-input pl-9 font-mono lowercase"
+                      placeholder="Choose username (e.g. rahul123)"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                    />
+                    <i className="fas fa-at absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {regUserErr && <p className="auth-error show">{regUserErr}</p>}
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Password</label>
-                  <input
-                    type="password"
-                    className="auth-input"
-                    placeholder="Create a password"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                  />
+                  <label className="form-label flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <span>Gmail / Email</span>
+                      <span className="text-red-400 text-xs font-bold">*</span>
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶ú‡¶ø‡¶Æ‡ßá‡¶á‡¶≤ / ‡¶á‡¶Æ‡ßá‡¶á‡¶≤ (‡¶Ü‡¶¨‡¶∂‡ßç‡¶Ø‡¶ï)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      className="auth-input pl-9 font-mono"
+                      placeholder="e.g. yourname@gmail.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                    />
+                    <i className="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
+                  {regEmailErr && <p className="auth-error show">{regEmailErr}</p>}
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label flex items-center justify-between">
+                    <span>Password</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° (‡¶Æ‡¶ø‡¶®‡¶ø‡¶Æ‡¶æ‡¶Æ ‡ß¨ ‡¶Ö‡¶ï‡ßç‡¶∑‡¶∞)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      className="auth-input pl-9"
+                      placeholder="Create a strong password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                    />
+                    <i className="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {regPassErr && <p className="auth-error show">{regPassErr}</p>}
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Confirm Password</label>
-                  <input
-                    type="password"
-                    className="auth-input"
-                    placeholder="Re-enter password"
-                    value={regConfirmPass}
-                    onChange={(e) => setRegConfirmPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                  />
+                  <label className="form-label flex items-center justify-between">
+                    <span>Confirm Password</span>
+                    <span className="text-[10px] text-amber-400 font-normal">‡¶ï‡¶®‡¶´‡¶æ‡¶∞‡ßç‡¶Æ ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶°</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      className="auth-input pl-9"
+                      placeholder="Re-enter password"
+                      value={regConfirmPass}
+                      onChange={(e) => setRegConfirmPass(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                    />
+                    <i className="fas fa-shield-alt absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                  </div>
                   {regConfirmErr && <p className="auth-error show">{regConfirmErr}</p>}
                 </div>
+
                 <div className="mb-4">
                   <div className="flex items-center justify-between">
                     <label className="form-label mb-1 flex items-center gap-1.5">
                       <i className="fas fa-gift text-amber-400 text-xs"></i>
-                      <span>Referral Code (‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶ï‡ßã‡¶° - ‡¶ê‡¶ö‡ßç‡¶õ‡¶ø‡¶ï)</span>
+                      <span>Referral Code (‡¶ê‡¶ö‡ßç‡¶õ‡¶ø‡¶ï)</span>
                     </label>
                     <span className="text-[9px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                       ‡ß´% ‡¶°‡¶ø‡¶™‡ßã‡¶ú‡¶ø‡¶ü ‡¶¨‡ßã‡¶®‡¶æ‡¶∏ üéÅ
@@ -3668,8 +3617,9 @@ export default function App() {
                     </p>
                   )}
                 </div>
+
                 <button
-                  className="btn-primary-solid flex items-center justify-center gap-2"
+                  className="btn-primary-solid flex items-center justify-center gap-2 w-full py-3"
                   onClick={handleRegister}
                   disabled={authSubmitting}
                 >
@@ -3678,40 +3628,7 @@ export default function App() {
                   ) : (
                     <>
                       <i className="fas fa-user-plus text-xs"></i>
-                      <span>CREATE ACCOUNT</span>
-                    </>
-                  )}
-                </button>
-                <div className="auth-divider">OR</div>
-                <button
-                  type="button"
-                  className="auth-google-btn"
-                  onClick={loginWithGoogle}
-                  disabled={googleLoading || authSubmitting}
-                >
-                  {googleLoading ? (
-                    <span className="loading-spinner"></span>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        />
-                      </svg>
-                      <span className="text-white font-extrabold tracking-wide">Sign Up with Google</span>
+                      <span className="font-extrabold tracking-wider">CREATE ACCOUNT / ‡¶∞‡ßá‡¶ú‡¶ø‡¶∏‡ßç‡¶ü‡ßç‡¶∞‡ßá‡¶∂‡¶®</span>
                     </>
                   )}
                 </button>
@@ -3721,6 +3638,8 @@ export default function App() {
           <p className="text-[10px] mt-6 text-center font-semibold text-slate-500">
             By continuing, you agree to our Terms of Service
           </p>
+
+
         </div>
       )}
 
@@ -6451,9 +6370,10 @@ export default function App() {
                     />
                     <button
                       onClick={handleUpdateUserName}
+                      disabled={profileSubmitting}
                       className="px-3 py-1.5 bg-emerald-500 text-black text-xs font-black rounded-xl hover:bg-emerald-400 transition shadow"
                     >
-                      Save
+                      {profileSubmitting ? '...' : 'Save'}
                     </button>
                     <button
                       onClick={() => setIsEditingName(false)}
@@ -6471,19 +6391,74 @@ export default function App() {
                         setIsEditingName(true);
                       }}
                       className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-amber-400 flex items-center justify-center text-xs transition border border-white/5"
-                      title="Edit Display Name"
+                      title="Edit Display Name (‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®)"
                     >
                       <i className="fas fa-pen"></i>
                     </button>
                   </div>
                 )}
 
-                {/* User Meta Badges */}
+                {/* User Meta Badges & Username Edit */}
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                  <span className="text-[11px] font-mono font-bold text-slate-300 bg-white/5 px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
-                    <i className="fas fa-at text-amber-400"></i>
-                    <span>{currentUser?.username || currentUser?.uid.slice(0, 8)}</span>
-                  </span>
+                  {isEditingUsername ? (
+                    <div className="w-full max-w-xs mx-auto mt-2 p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold">
+                        <span>Change Username (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®)</span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-mono">@</span>
+                        <input
+                          type="text"
+                          className="auth-input py-1 pl-7 text-xs font-mono lowercase"
+                          placeholder="new_username"
+                          value={editUserUsername}
+                          onChange={(e) => setEditUserUsername(e.target.value)}
+                        />
+                      </div>
+                      {editUserUsernameErr && (
+                        <p className="text-[10px] text-red-400 font-semibold">{editUserUsernameErr}</p>
+                      )}
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingUsername(false);
+                            setEditUserUsernameErr('');
+                          }}
+                          className="px-2.5 py-1 bg-slate-800 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-slate-700"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleUpdateUserUsername}
+                          disabled={profileSubmitting}
+                          className="px-3 py-1 bg-amber-500 text-black text-[11px] font-black rounded-lg hover:bg-amber-400 transition"
+                        >
+                          {profileSubmitting ? 'Saving...' : 'Update Username'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-bold text-slate-300 bg-white/5 px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
+                        <i className="fas fa-at text-amber-400"></i>
+                        <span>{currentUser?.username || currentUser?.uid.slice(0, 8)}</span>
+                      </span>
+                      <button
+                        onClick={() => {
+                          setEditUserUsername(currentUser?.username || '');
+                          setEditUserUsernameErr('');
+                          setIsEditingUsername(true);
+                        }}
+                        className="w-6 h-6 rounded-md bg-white/5 hover:bg-amber-500/20 text-slate-400 hover:text-amber-300 flex items-center justify-center text-[10px] transition border border-white/5"
+                        title="Change Username (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶® ‡¶ï‡¶∞‡ßÅ‡¶®)"
+                      >
+                        <i className="fas fa-pen"></i>
+                      </button>
+                    </div>
+                  )}
+
                   <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
                     <i className="fas fa-shield-check text-emerald-400"></i>
                     <span>VERIFIED USER</span>
@@ -6520,13 +6495,43 @@ export default function App() {
 
                   <div className="flex justify-between items-center py-1 border-b border-white/5">
                     <span className="text-slate-400">Username:</span>
-                    <span className="font-mono text-white font-bold">@{currentUser?.username}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-white font-bold">@{currentUser?.username}</span>
+                      <button
+                        onClick={() => {
+                          setEditUserUsername(currentUser?.username || '');
+                          setEditUserUsernameErr('');
+                          setIsEditingUsername(true);
+                        }}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex justify-between items-center py-1 border-b border-white/5">
                     <span className="text-slate-400">Full Name:</span>
-                    <span className="text-white font-bold">{currentUser?.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold">{currentUser?.name}</span>
+                      <button
+                        onClick={() => {
+                          setEditUserName(currentUser?.name || '');
+                          setIsEditingName(true);
+                        }}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
+
+                  {currentUser?.email && (
+                    <div className="flex justify-between items-center py-1 border-b border-white/5">
+                      <span className="text-slate-400">Gmail / Email:</span>
+                      <span className="font-mono text-slate-200 font-semibold">{currentUser.email}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-between items-center py-1 border-b border-white/5">
                     <span className="text-slate-400">Current Balance:</span>
@@ -6562,7 +6567,72 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Referral & 10% Deposit Bonus Card in Profile */}
+              {/* Security & Credentials Section */}
+              <div className="glass-card p-4 space-y-3">
+                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center justify-between border-b border-white/5 pb-2">
+                  <div className="flex items-center gap-2">
+                    <i className="fas fa-shield-alt text-amber-400"></i>
+                    <span>Security & Account Settings (‡¶∏‡¶ø‡¶ï‡¶ø‡¶â‡¶∞‡¶ø‡¶ü‡¶ø ‡¶ì ‡¶∏‡ßá‡¶ü‡¶ø‡¶Ç‡¶∏)</span>
+                  </div>
+                </h4>
+
+                <div className="space-y-2">
+                  {/* Change Password Button & Trigger */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xs">
+                        <i className="fas fa-key"></i>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">Password (‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶°)</p>
+                        <p className="text-[10px] text-slate-400">‡¶Ü‡¶™‡¶®‡¶æ‡¶∞ ‡¶è‡¶ï‡¶æ‡¶â‡¶®‡ßç‡¶ü‡ßá‡¶∞ ‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶® ‡¶ï‡¶∞‡ßÅ‡¶®</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowChangePassModal(true);
+                        setChangePassErr('');
+                        setChangePassSuccess('');
+                        setCurrentPasswordInput('');
+                        setNewPasswordInput('');
+                        setConfirmNewPasswordInput('');
+                        haptic('light');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold transition active:scale-95 flex items-center gap-1.5"
+                    >
+                      <i className="fas fa-lock text-[10px]"></i>
+                      <span>‡¶™‡¶æ‡¶∏‡¶ì‡ßü‡¶æ‡¶∞‡ßç‡¶° ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®</span>
+                    </button>
+                  </div>
+
+                  {/* Change Username Button & Trigger */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xs">
+                        <i className="fas fa-at"></i>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">Username (‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ)</p>
+                        <p className="text-[10px] text-slate-400">‡¶¨‡¶∞‡ßç‡¶§‡¶Æ‡¶æ‡¶®: @{currentUser?.username}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditUserUsername(currentUser?.username || '');
+                        setEditUserUsernameErr('');
+                        setIsEditingUsername(true);
+                        haptic('light');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-[11px] font-bold transition active:scale-95 flex items-center gap-1.5"
+                    >
+                      <i className="fas fa-pen text-[10px]"></i>
+                      <span>‡¶á‡¶â‡¶ú‡¶æ‡¶∞ ‡¶®‡¶æ‡¶Æ ‡¶™‡¶∞‡¶ø‡¶¨‡¶∞‡ßç‡¶§‡¶®</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+{/* Referral & 10% Deposit Bonus Card in Profile */}
               <div
                 onClick={() => {
                   setShowReferralModal(true);
@@ -9468,7 +9538,7 @@ export default function App() {
                                 showToast('Error: ' + e.message, 'error');
                               }
                             }}
-                            className="px-4 py-1.5 bg-amber-500 text-black font-black text-xs rounded-xl hover:bg-amber-400 transition whitespace-nowrap shadow"
+                            className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl shadow transition whitespace-nowrap"
                           >
                             Save %
                           </button>
@@ -9477,81 +9547,46 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Summary Metric Counters */}
-                  <div className="grid grid-cols-3 gap-2.5">
-                    <div className="bg-slate-900/90 p-3 rounded-2xl border border-amber-500/20 text-center">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase">Total Bonus Paid</span>
-                      <div className="text-base font-black text-amber-400 font-mono mt-0.5">
-                        ‡ß≥{allReferralCommissions.reduce((acc, c) => acc + (c.commissionAmount || 0), 0).toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="bg-slate-900/90 p-3 rounded-2xl border border-blue-500/20 text-center">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase">Total Payouts</span>
-                      <div className="text-base font-black text-blue-400 font-mono mt-0.5">
-                        {allReferralCommissions.length}
-                      </div>
-                    </div>
-                    <div className="bg-slate-900/90 p-3 rounded-2xl border border-emerald-500/20 text-center">
-                      <span className="text-[9px] font-extrabold text-slate-400 uppercase">Referred Users</span>
-                      <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
-                        {allUsersList.filter(u => u.referredBy).length}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Commission Logs & History */}
-                  <div className="glass-card p-4 space-y-3 border border-white/10">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                  {/* Section: Referral Commission History Log */}
+                  <div className="glass-card p-4 space-y-3 border border-white/5">
+                    <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <i className="fas fa-history text-amber-400"></i>
-                        <span>Referral Commission Logs ({allReferralCommissions.length})</span>
+                        <span>Referral Payout History (‡¶∞‡ßá‡¶´‡¶æ‡¶∞‡ßá‡¶≤ ‡¶ï‡¶Æ‡¶ø‡¶∂‡¶® ‡¶π‡¶ø‡¶∏‡ßç‡¶ü‡ßã‡¶∞‡¶ø)</span>
                       </h4>
-                      <span className="text-[10px] text-slate-400 font-mono font-bold">Auto-credited on deposit approval</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {allReferralCommissions.length} records
+                      </span>
                     </div>
 
                     {allReferralCommissions.length === 0 ? (
-                      <div className="text-center py-8 text-slate-500">
-                        <i className="fas fa-gift text-3xl mb-2 opacity-40"></i>
-                        <p className="text-xs">No referral commission payouts recorded yet.</p>
-                        <p className="text-[10px] text-slate-600 mt-1">
-                          When users deposit and admin approves, referral bonus will automatically show here.
-                        </p>
+                      <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 text-center text-xs text-slate-400">
+                        No referral commissions logged yet.
                       </div>
                     ) : (
-                      <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                         {allReferralCommissions.map((comm) => (
                           <div
                             key={comm.id}
-                            className="p-3 rounded-xl bg-slate-900/90 border border-white/10 hover:border-amber-500/40 transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5"
+                            className="p-3 rounded-xl bg-slate-900/80 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-black text-xs shadow-inner">
-                                +{comm.bonusPercent || 10}%
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-white">@{comm.referrerUsername}</span>
+                                <span className="text-[10px] text-slate-400">earned from</span>
+                                <span className="font-bold text-amber-300">@{comm.referredUsername}</span>
                               </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-extrabold text-xs text-white">
-                                    Referrer: @{comm.referrerUsername || comm.referrerUid.slice(0, 8)}
-                                  </span>
-                                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-bold">
-                                    Earned ‡ß≥{comm.commissionAmount.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
-                                  <span>From depositor: <strong className="text-slate-200">@{comm.referredUsername || comm.referredUid.slice(0, 8)}</strong></span>
-                                  <span>‚Ä¢</span>
-                                  <span>Deposit: <strong className="text-amber-300 font-mono">‡ß≥{comm.depositAmount}</strong></span>
-                                </div>
+                              <div className="text-[10px] text-slate-400">
+                                Deposit: ‡ß≥{comm.depositAmount} ({comm.bonusPercent}%) ‚Ä¢{' '}
+                                {comm.timestamp?.toDate
+                                  ? comm.timestamp.toDate().toLocaleString()
+                                  : 'Recently'}
                               </div>
                             </div>
-
-                            <div className="text-right self-end sm:self-auto">
-                              <div className="text-xs font-mono font-black text-emerald-400">
+                            <div className="text-right">
+                              <span className="text-sm font-mono font-black text-emerald-400">
                                 +‡ß≥{comm.commissionAmount.toFixed(2)}
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-mono">
-                                {comm.timestamp?.seconds ? new Date(comm.timestamp.seconds * 1000).toLocaleString('en-US', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : (comm.createdAt ? new Date(comm.createdAt).toLocaleDateString() : 'Recent')}
-                              </div>
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -9563,142 +9598,95 @@ export default function App() {
             </section>
           )}
 
-          {/* SEARCH MODAL */}
-          {showSearchModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#0b1329] border border-blue-500/30 rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.3)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/80">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
-                      <i className="fas fa-search text-xs"></i>
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm text-white">Search Services (‡¶∏‡¶æ‡¶∞‡ßç‡¶ö ‡¶ï‡¶∞‡ßÅ‡¶®)</h3>
-                      <p className="text-[9px] text-slate-400">Find any SMM service by name, platform or ID</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowSearchModal(false)}
-                    className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white"
-                  >
-                    <i className="fas fa-times text-xs"></i>
-                  </button>
-                </div>
+          {/* Bottom Floating Navigation Bar */}
+          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#070d1d]/90 backdrop-blur-xl border-t border-white/10 px-4 py-2 flex items-center justify-around max-w-lg mx-auto sm:rounded-t-2xl shadow-2xl">
+            <button
+              onClick={() => {
+                setActiveTab('home');
+                haptic('light');
+              }}
+              className={`flex flex-col items-center gap-1 transition ${
+                activeTab === 'home' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <i className="fas fa-home text-base"></i>
+              <span className="text-[10px] font-bold">Home</span>
+            </button>
 
-                {/* Search Input Bar */}
-                <div className="p-4 border-b border-white/10 bg-slate-900/40">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      autoFocus
-                      className="input-modern pl-10 pr-10 text-xs"
-                      placeholder="Type platform or service (e.g., Facebook, Followers, Likes, TikTok)..."
-                      value={globalSearchQuery}
-                      onChange={(e) => setGlobalSearchQuery(e.target.value)}
-                    />
-                    <i className="fas fa-search absolute left-3.5 top-3.5 text-blue-400 text-xs"></i>
-                    {globalSearchQuery && (
-                      <button
-                        onClick={() => setGlobalSearchQuery('')}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs p-1"
-                      >
-                        <i className="fas fa-times-circle"></i>
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <button
+              onClick={() => {
+                setActiveTab('orders');
+                haptic('light');
+              }}
+              className={`flex flex-col items-center gap-1 transition ${
+                activeTab === 'orders' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <i className="fas fa-shopping-bag text-base"></i>
+              <span className="text-[10px] font-bold">Orders</span>
+            </button>
 
-                {/* Search Results List */}
-                <div className="p-4 overflow-y-auto max-h-[55vh] space-y-2.5">
-                  {(() => {
-                    const q = globalSearchQuery.trim().toLowerCase();
-                    const filtered = allServices.filter((s) => {
-                      if (!q) return true;
-                      return (
-                        s.name.toLowerCase().includes(q) ||
-                        s.category.toLowerCase().includes(q) ||
-                        s.id.toLowerCase().includes(q) ||
-                        (s.description && s.description.toLowerCase().includes(q))
-                      );
-                    });
-
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="text-center py-10">
-                          <i className="fas fa-search-minus text-3xl text-slate-600 mb-2"></i>
-                          <p className="text-xs text-slate-400 font-bold">No services found for "{globalSearchQuery}"</p>
-                          <p className="text-[10px] text-slate-500 mt-1">Try searching for "Facebook", "Likes", or "Followers"</p>
-                        </div>
-                      );
-                    }
-
-                    return filtered.map((svc) => {
-                      const meta = getPlatformMeta(svc.category);
-                      return (
-                        <div
-                          key={svc.id}
-                          className="p-3.5 rounded-2xl bg-slate-900/80 border border-white/10 hover:border-blue-500/40 transition-all flex flex-col gap-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="w-6 h-6 rounded-lg flex items-center justify-center text-xs"
-                                style={{ color: meta.color, backgroundColor: `${meta.color}20` }}
-                              >
-                                <i className={meta.icon}></i>
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                {svc.category}
-                              </span>
-                            </div>
-                            <span className="text-[9px] font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                              ID: {svc.id}
-                            </span>
-                          </div>
-
-                          <h4 className="font-extrabold text-xs text-white leading-snug">{svc.name}</h4>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-black text-emerald-400">
-                                ‡ß≥ {svc.price} <span className="text-[9px] text-slate-400 font-normal">/1k</span>
-                              </span>
-                              <span className="text-[9px] text-slate-400">
-                                Min: {svc.min} | Max: {svc.max?.toLocaleString()}
-                              </span>
-                            </div>
-
-                            <button
-                              onClick={() => handleSelectServiceFromSearch(svc)}
-                              className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-[10px] rounded-xl shadow-md active:scale-95 transition flex items-center gap-1"
-                            >
-                              <span>SELECT</span>
-                              <i className="fas fa-arrow-right text-[8px]"></i>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
+            <button
+              onClick={() => {
+                setActiveTab('funds');
+                haptic('heavy');
+              }}
+              className={`flex flex-col items-center gap-1 transition ${
+                activeTab === 'funds' ? 'text-cyan-400 scale-105' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div className="w-9 h-9 -mt-4 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-black flex items-center justify-center shadow-lg shadow-amber-500/30 border-2 border-[#070d1d]">
+                <i className="fas fa-wallet text-sm"></i>
               </div>
-            </div>
-          )}
+              <span className="text-[10px] font-bold text-amber-300">Deposit</span>
+            </button>
 
-          {/* NOTIFICATIONS MODAL */}
-          {showNotifModal && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 animate-fade-in">
-              <div className="bg-[#0b1329] border border-amber-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(245,158,11,0.25)] w-full max-w-lg mx-auto">
-                {/* Modal Header */}
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-slate-900/80">
-                  <div clxú‰Mo«ıû_1QìJµ¸êDCVM≤¨¥$ªà∏Ö ÿKÓêúhwg≥≥…0<4áˆP=F/“)4ÜR¯–˙P¥Ö?•ofvWªÀùŸ%m#m≥∞©˝òyÔÕ˚~o∆dÏÅÈ‡ˆFœ∆cDÏ0£ã› ˚®oz∆v≠µq πÓZ‰
-um3ö?2ˆ– ˛˚tËZÿ2∆6ÍÙ”È`ﬂh5ıÌZFÒ…ê§7â<¬)ªçÜ1†&Iƒ=ì°ûit∞mK c∂qp∑Nd◊Ånıäî(;)ú‘¿Âõj[-s‰ﬂ— ñò≥V¡NÂö ÛL˜‡ÜêÆÍ≤ªuÒN9e:t}lZbŒ=@®Ån›BUÂîOr1 &BJ.@‹ûﬂÒ∆H¨∂cõ›K‰ççm‰MåFm;ñtoh€öuÂ:C.Èà,X˘ÊL%®˙`G)D/πÏƒ•¸l3¿RÔ>ˆ,∏g[»¬e$@,0É!√›B¶Î¬∫ÿ©ÇÄº’,¸ê˜%cP´i– ™p∑3Í*9L›#õt/€S«Ù/m[@fÎëÇªR}b;âÌËˆ˜π˘6qq⁄_4BŸj-ÆnÕXŸÏ>ÍPfÑRfCAôZè¯z¨N©MíK˘ J®ÁlÃ◊Í&j ÜÉ≥	ÓûRÀ¥´=”fX©ﬂÖWXoΩï·í|€,ÎÉc[et„ÚYºíßàñT∆U´ôØ∞/ïuMÎÔ°îgE'ÑËΩ˙2õ≥fËªàÛ†g”ë11Ãa@ëcéçÅq~ªq5∏@‡®∫æ®BÂ‘M"ÆŸÿÌ‘n∑¡>ﬂWògñ¡¨P@‹÷àç\¶l Ÿæ3∂ìrærv:‹µ(eëÎ<«,´-±©o@ C©Ö£	Vwóõh_¡¢4W”´V≈+aUS≈"l “Â&+AmT	D‹5∫ƒÔ⁄a‡ÎÿCπ"∞(q/LÂ«
-¿§á$˙Z0Ò∞ên%ïÕ\î#”Ê‘lL|”∂"Ñ—„8Öµ+0˙¥{a$ÆE˙4B>≠ÅœÛ©C¯˙§bÛà{·˜1&*Cﬂ’§1‹@4È√%û¥•›’à&^-ycïﬁ»|u âT´ûèØ¯DÌ4Ñ¯∞PEö™d	F4Ç'ò¢Z≠Ên!»˜ëàh‡nnjl™$∆Øôn˘7=}Í;l£`≤Õ£â!êÂ∫†«∞btuá>£æ·Q"‹—ı<ìîk*‡“˚®˙!ù…Pê;çÂø€@l`Z‡äœOOö-o¸ƒÔwÃÍˆnk´Ÿ⁄€j6∑µfkÛ¢RÄm?Ém∑ëéï-D¡±ì`bÏ5t∞fO’÷ÈÖ&›Él”D∂∑SêWgÄLüÊ‰Â">¯r>–`üh‰€4,±H√SaÁffçy6	™TŸ<o\†!∏Éﬂ‹ÔÕãô.˛Ñx‘Âõé±F≥Äëe“Ôàmå0vy»,ÀK«›¢“1
-§∫“±©¨ƒ”WËˆÿXg˙ôÒ“Bãj«ƒ™≤U‰
-√ÅëÆ
-o2zÓ¸Mó8‹⁄ Ùy™°Øn.e.ú†¶>ÿ-!â,Õ˘%`+JdÍ“çÉò°ûï#∫ÑíÊ£ÕfÜî ≈π «†F∑Õ1∂bÇ âffü”§H™JìS0@˚Y{fy+Gêπ∞s^.ΩXâ'ûﬂü~xrÔ·œ—È√˚á'ô‘~ †∆:5â›°cQe-+˙í˝`6".}ÜüÅV»\–Ï^÷˜‡˛Z>ıxvËé%≠V¯ö.µc_Å]1g?„q=ÄoyiEœ¥0‰aK&û%h8ˇA£”‹Ÿæsë©Òíi„N#6DôÓ∫Ë+òΩ=^¡§Ièãù±,ps…x€jDÒ∂y{´π!w˚ƒ€mà∑h$MûCÒ2›ãb)«i	i	)¸tP∂⁄Y°™çúu*÷ÔÂ◊O%;0ØŸMg˜%√s¢BX≠Ù√Ó∂©áˇZ£‹~—=:F’≈¸zÒ¸◊ã9¸{âÛã˘≥≈Ûﬂ.ÊØ6KvL9®◊jòF5·€Óò∆ÑÍb‡w€,=zÖ|5 ºº-RÀ!Ó[lîj˙k˘›µ§Á◊ˆ◊˛ªk
-æ≠ﬂYS˜’tÌ≥Gfáïr‘ÇJOùÚ√-Ö^I¿°pÅæjÖ∏pW)ÓÙ©,
-∏]Ús\•}W°4Öﬂ ÷« Çÿâ	ïΩI¨“j°^nÖl¨ô†ü”:jjÍ÷˝∏ZÛÁÊWª+®®X¥.	Wˆ!Ö™SŒ2ﬁ©ª¶3ç◊vã◊V®.u< ˇäJE‰~œî 3=†⁄≥M™÷O…E*ßØƒÔ!ì¯Îb˛Ø≈¸O‚˜Îµî≠¿Ö¢#–êÙŸz»ﬂn»w3•∑ä∂3b	ª,ÿÕ»CS~GCÃŒì:'¬ËÌÀı75Ï76~Aá~dxà0Ñ/òhãp}≠‹·‡WÃh—=ÊO≤Å\–X‘¶ñ¢9ŒAÙ∆ó|#ﬂ	Êñ√7M´!ÄÇÊÃ:ÊÇé≤dJπñ≤Æ©úÙj ∂r™Ã-”V.—X÷É–ıìıÂu{ò%ãØw6!iπoxÚÏ€©˛•"y)fïK¥œõç‘ÑR‘\_3d ?6 ò)ÏR0%˚õ˘M…ÂÃ!Q$HÎeòüúx£=…ı§Çö“˝QuaóSægi≈éÙ˜Õò;√Œ'∏Ãä[√Îvbo˙Å†°¢/î*s*ƒbCì¥G≠›>j˚æWn)™µ¨æCœëÃG—‘w ÂY)QÔ}È∫Q’6;ÿN´èÔ‚-ÔVµ‡…ﬂã≈¸ﬂã˘?ÛoÛB≤'Fh‡◊éÛ]q©?™sH¸J–% ÇÅÇ∏∫)êÿvÒ 4˚Ì\Î◊–C°[Ñ±!Fú/vπ ‚~:$˛DÎ ¥áXÜˇê€„”Ì√Ñ*NñG·‘*Æ¶ﬂ«AMÄ’‰u•,uj˙:Ç>ï6ƒ˝+ëÿ-≤˙ø…~!ø-√Ø‡æÑÏπTMH84ºÚÈàµßªÂ∂€S≤G>f‰3l∏‘UúØíWJ˚ºÁ8·…(;p°¯πFx>ÌÿÿÅW»¬˜)µZIµ8-v>*µßñW•g◊Sê≤áÅ\À∆ºˆ„t™	≤3ÅqVl!	˘•Œ<v◊|iÚƒ`‘&eÀ˝’è-f®”V^9a›¶2ê1è∏‡9ä7cıE
-`(à∞E{âÕâ‘ZŒé‹Gß«ggá?9]y ¢W(Âc¿J•m†ÎŒá™cÊ[›}||rÙÙÌ‹œ›Ω˚€]Í‡ù˚¢ûÇŒ∑I€b≥4$Ü§©Â©=ƒ÷˚O<,èzD”°ä…ëâÈ—#âÌ?¥–ûÜOG‘Ìë~-˘}˛9™,Êøó1[¥m^ÚÕ.‰kÙ—ËÏÙ˝Ï¡Ò…ªï|†h*I1ˇrÒ¸óHG~∑ò#ˇºø◊ÚW(◊ƒo•ÚÖ`˛ÚUzæ`·f.æ˝]¸Üü!™ÆÑÚı´≈Ûﬂàa1PæÌu-Úó?ã_AÆ–˚ÎÑ)<Äø#æà…zôÄﬂæâFÛfJGÀgÚ’´àxıaa◊∞úáÕ°E(ËÀí „ÇªA¿2ª‡©s»G}Ï€ŸŸÈØÈôåß€«nË±”Ûíﬂ–ªÌ∂<OóôÆ˘ÑˆÈ“‹}z4&êÃfˆñíÜíª∑D›ÊÈCÒà
-›W6TÃû±Äëá›Ä\a—£√∫"]Ã*ôq35˜Â—‘7MI|‚UCH¬Õ¶|Y»µ¯¿òΩÛ   ˇˇ HbÛ¸
+            <button
+              onClick={() => {
+                setActiveTab('profile');
+                haptic('light');
+              }}
+              className={`flex flex-col items-center gap-1 transition ${
+                activeTab === 'profile' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <i className="fas fa-user text-base"></i>
+              <span className="text-[10px] font-bold">Profile</span>
+            </button>
+
+            {isAdminUser && (
+              <button
+                onClick={() => {
+                  setActiveTab(activeTab === 'admin' ? 'home' : 'admin');
+                  haptic('heavy');
+                }}
+                className={`flex flex-col items-center gap-1 transition ${
+                  activeTab === 'admin' ? 'text-amber-400 scale-105' : 'text-amber-500/70 hover:text-amber-400'
+                }`}
+              >
+                <i className="fas fa-crown text-base"></i>
+                <span className="text-[10px] font-bold">Admin</span>
+              </button>
+            )}
+          </nav>
+
+          {/* Screenshot Preview Modal */}
+          {selectedScreenshotPreview && (
+            <div
+              onClick={() => setSelectedScreenshotPreview(null)}
+              className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+            >
+              <div className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-white/20 rounded-2xl overflow-hidden shadow-2xl p-2">
+                <img
+                  src={selectedScreenshotPreview}
+                  alt="Proof Screenshot"
+                  className="w-full h-full object-contain max-h-[85vh] rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedScreenshotPrevxú‰ZKo#«æ˚WtÑ¿$9%ÏjC ÿ’√lKA$#Aê{fö3mÕ3=|ò÷!á¿ßú_úÉa`√åç±»!…)˘+ÑI™{f»yıà‘Jv‚Âb)NwWuuu◊WU]C…®ÈF∂›∫yï>∫ç√;§øÅµ–≥#FÛ|e‘¥¸’LE≥±~›y¨"F∆LY^‰ƒP¿çî«»ÇˇõåÙ:°¢óë }Öå&È£Ê∆‚OÃ©≥•"Àí‡I:bvC ®ÁnîDﬁ´XDèf◊1¿!`ÖQáÑ{Ω-ìÙ:ZƒòÁ{zÉÛç•&PcÊi⁄yÌ[ÿ5	˙5H0ÇÖ°è=€ËùNVﬂ”–ÚFÒ@>.Úˆ€®ôüÊ -ÖéâÅ®¶®ËsÂbSU/o◊≤_ÿ6˛Ï™fGÅ‚ª‘¡å(lÖ∫%=‰ f°Õ	vUµ∞áÿ—‡{GU;]uq(∂∆6rXÒ…FÒÒï˙X' ƒ-lx#ÂBΩ⁄T˝Ò’6ˇ
+L7’w≈øˆ„÷%
+LJá§$_¨˜ÊÇ‰-Q§Tea#B‹t9Z˛ln™»◊înÖ ´Ãab_ŸjÔTRóÈS#Jï:Ω/ıªY´˙[Ö∞›òd[U%2Il…ˆÙkâ)	ö≤Ÿd)ù ÍfÁÜx.KÅ`Å7{E+kŒgﬂÕgˇûœ˛5ü˝q˛‚Ò˚’¸≈Ê≥oëË{5ü˝g>{ô∂>üœ˛⁄Íu¨ÆTø$Œ?ùó±±›'¡˚ïòÙ;Œ;ôÅÀÄ∏L¸˘eF¶øÃ_|âå˝¸@ıÚá/Á≥o‡◊W¢ôìÙ:˛ö Ôà∞íõÁÓ€TøÓOõ-‘ﬂCSâ∫ îŒ †÷`;$≠_…âñáA–l4V{È:	C˘¯õ*˜ÜÚˆÏ—¬¿lìXlË;K¥∞¸¸Æ'2.p5ìáµ˛¨⁄£›¡ß…Ω⁄‚T¢Ë3œò†#/pV“¡´!q™g˜∂Ïﬂd\LÄ/Ä_ï∞óvtì‚œ|Rm¸âC5œ6*6I†Úz¯G∆–vP—i†€d9WB+†Óµ¢÷`$p›π{y›Ù:¢u=´Œá  OåÂı6Ä8$¿∂d≤ùÈF§mº∫EÙÎ{‹ÜDY˜πrØ◊≥±FÏ‹™¿Ùî∏5]å£)õYÙÈ÷¯Î˝(@ï9øòuyﬂøRÎmZí%°Vã]j"µÑÄ∫~ƒ$ù±âœOa≤Ü*îå?Ÿt%bñ"∏"ﬂVvÂ4>ÑƒÇ„GÇ˛∆°8uz¢¥€'b;"˝iBê*˘òO[Ìo¯®8]‡Aâp°‹ìUphí6√ÅIX[LSô†ÒOg-˚∏&¥»Âl2`JW§tõù-§W$’D4dNŸŒ“lÔÎ…|Ãèj'dî≥Ñ√-%≥æcæçˇÒ⁄ãó–Û˚e€Ï’õg,.Ë4dÅÁö´€–ºÜ≠ú®∆NxRÛ∆ æÁ(ƒ|w4ò4˙áx˛Z¸~ûÀUﬁ$;˘Q»¬TV˜)Ò˚ön•ö…™√ô~H&ﬁ»]p%mÓA˙˝>j h0&6l≤L«¯LÕ{2ƒ–¢¬F◊˝Ñ)iÆLöé<èÔ˜3ëoÖØyE\#éÉëœ‡+â∞YÒ&™˙™&èèœ<†˙4˛\3}¨l#¬ïôﬁ\>V3◊Ãq”#U-¿e>m)K&'∫Køè] ∫É“€†Á+ˇæV˙~o€\e≈’ 4hà5õ˝\¢§9î1Íö∑nÄ∆\≈®ÉÉâˆL[≤oI^«‚ûOñÆ¨ÊJ)—{íÏÙ)®$?ÃÆ≈ˆ∞‹î–ßÆKé0ÚDq¡aÔÅ™›n◊ÔI∞≤Öû‹I˙JÄ≈C≤@.eˇƒ7¿"ñÅAgq!˘∑¬Ö‰ùñVu|nΩº∫µqÖJÕoâ≠{AO]ÃZ'O•Âöd¥¨VìtwƒÄÇ|úæ_‚R\xí‡∂9FÙßôÙ≈H≠|Ó1lür∑∆ôÜJ¢Q<˚9e6Lë<â†¡l3ﬁ(#Ä”Rm≈·82®k+1_t)tzûÛîwÿE≤|oë6‰`|Ë&»îßÃˆïË [>ÚLØ?≈ÜC›≥‰ëk¨¿$È)2‡ÍÖ$uîâCÃnm‚ÀÑ'Ä&X”π'∂IÓkÂLÀn∆>’yl|éµf√ÇÒegYrìYYàÔ¡bBöÏCx´8ùzKÌ†sÏÌãA?ü 5‘ÓÅ{◊¢Í.|.Î¶+ï\”™*uQRXEFƒ∑∆[πXπ (
+•ã¬È∫U◊Ó8©≤∆µU^ÑÕT+µ◊ä8Úˇ≥\∫ã,¯/+ón…u∂Ωvπ4âù5o™#ç<DŸt; aH`Ø¶U‘lÈÙ#0MnQœ‡XõB_±qı:÷ˆÎC˜-†Mº(@ÉàEEÍH«Ó‘0§aÑÌü¶rô`X$0J≈hyÌí“LÒ¨¨W43Ä ú)∫gáÇ◊Y⁄¥y™}Ft∆o¬Ê˘á^Ìüûø÷B ÔπkÙ‚≤’v∞ﬂl2˛Ù!ô≠K*N5€ÜÃ’ü¶\d∑
++f´¬e§\J'K?≤=€gÃ∞I⁄@~»–lÑés’5Æ}„]¥˚pˆõõø<%œw%lˆN?ıïnÓÖöÕƒ!‰ó#ô|˝RÆ∂‘Ñ∏‘IW!%@ê75™°4àâì±ÕÙWvx£Ü˘¡<≠∫›G©
+/cuÛiµkÀ~%‹Ãºf©&ÆÑ3VÆcüB|—á¯¡`r6rëÍ˜ÚΩ∂Ò3mjD‹6Wpú®!Ω@ª%±*Æ%ÜÁ›2:'Kr “ë:÷˙5hÿ0≈"«‹/bÁqgbÿ∑®6Ó≤Ü∫ªéVÖVVE∫⁄¥ßüÑ5’ÅK•∂KµÌ‚≈{úä‰›ÓπNÓ·Ö›sCÜ\êı—/hÿ=H“°ök∑„Â®&ßîBV-BíòÍ3P◊åYIy•(i<ú‹˘ñrÈOîÕ¸ªÀÀªÚ8r§ÃË+¿Ã;1'Åç¡“◊P∂2Ø°tKÅz:j[d’0&π‰*àxzÇ~¯˙[!œÈ—˙·œ™¥≈áπY©ÏK⁄m∞µ7o˝  ˇˇ Öó7Å
