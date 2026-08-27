@@ -4540,13 +4540,63 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Rich Grid of All Payment Methods */}
+                    {/* Rich Grid of All Payment Methods with distinct brand styling */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       {(Object.entries(paymentMethodsConfig) as [string, PaymentMethodConfig][])
                         .filter(([_, m]) => m && m.active !== false)
                         .map(([key, method]) => {
                           const methodId = method.id || key;
                           const isSelected = selectedMethod === methodId;
+                          const mKey = (method.iconType || method.id || method.label || key).toLowerCase();
+                          const isBkash = mKey.includes('bkash');
+                          const isNagad = mKey.includes('nagad');
+                          const isRocket = mKey.includes('rocket');
+                          const isUpay = mKey.includes('upay');
+                          const isBinance = mKey.includes('binance') || mKey.includes('crypto') || mKey.includes('usdt') || !!method.isCrypto;
+
+                          // Dynamic brand themes for each card
+                          let cardBg = 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-300 border-white/10 hover:border-white/20';
+                          let brandBadge = 'bg-slate-800 text-slate-300';
+                          let brandSub = 'Send Money';
+
+                          if (isBkash) {
+                            brandSub = method.type || 'বিকাশ সেন্ড মানি';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#9b0f49]/80 via-[#e2136e]/40 to-slate-900 border-[#e2136e] shadow-[0_0_25px_rgba(226,19,110,0.4)] ring-2 ring-[#e2136e]'
+                              : 'bg-gradient-to-r from-[#e2136e]/10 to-slate-900/80 border-[#e2136e]/30 hover:border-[#e2136e]/60 text-slate-200';
+                            brandBadge = 'bg-[#e2136e]/20 text-pink-300 border border-[#e2136e]/40';
+                          } else if (isNagad) {
+                            brandSub = method.type || 'নগদ সেন্ড মানি';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#9a3412]/80 via-[#ea580c]/40 to-slate-900 border-[#ea580c] shadow-[0_0_25px_rgba(234,88,12,0.4)] ring-2 ring-[#ea580c]'
+                              : 'bg-gradient-to-r from-[#ea580c]/10 to-slate-900/80 border-[#ea580c]/30 hover:border-[#ea580c]/60 text-slate-200';
+                            brandBadge = 'bg-[#ea580c]/20 text-orange-300 border border-[#ea580c]/40';
+                          } else if (isRocket) {
+                            brandSub = method.type || 'রকেট সেন্ড মানি';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#581c87]/80 via-[#8c3494]/40 to-slate-900 border-[#8c3494] shadow-[0_0_25px_rgba(140,52,148,0.4)] ring-2 ring-[#8c3494]'
+                              : 'bg-gradient-to-r from-[#8c3494]/10 to-slate-900/80 border-[#8c3494]/30 hover:border-[#8c3494]/60 text-slate-200';
+                            brandBadge = 'bg-[#8c3494]/20 text-purple-300 border border-[#8c3494]/40';
+                          } else if (isUpay) {
+                            brandSub = method.type || 'উপায় সেন্ড মানি';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#003b73]/80 via-[#005696]/40 to-slate-900 border-[#0077b6] shadow-[0_0_25px_rgba(0,119,182,0.4)] ring-2 ring-[#0077b6]'
+                              : 'bg-gradient-to-r from-[#005696]/10 to-slate-900/80 border-[#005696]/30 hover:border-[#005696]/60 text-slate-200';
+                            brandBadge = 'bg-[#005696]/20 text-cyan-300 border border-[#005696]/40';
+                          } else if (isBinance) {
+                            brandSub = 'Binance Pay / USDT';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#713f12]/80 via-[#f0b90b]/20 to-slate-950 border-[#f0b90b] shadow-[0_0_25px_rgba(240,185,11,0.4)] ring-2 ring-[#f0b90b]'
+                              : 'bg-gradient-to-r from-[#f0b90b]/10 to-slate-950/80 border-[#f0b90b]/30 hover:border-[#f0b90b]/60 text-slate-200';
+                            brandBadge = 'bg-[#f0b90b]/20 text-amber-300 border border-[#f0b90b]/40';
+                          } else {
+                            brandSub = method.type || 'ব্যাংক ট্রান্সফার';
+                            cardBg = isSelected
+                              ? 'bg-gradient-to-r from-[#064e3b]/80 via-[#0f766e]/40 to-slate-900 border-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.4)] ring-2 ring-emerald-500'
+                              : 'bg-gradient-to-r from-emerald-600/10 to-slate-900/80 border-emerald-500/30 hover:border-emerald-500/60 text-slate-200';
+                            brandBadge = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                          }
+
                           return (
                             <div
                               key={methodId}
@@ -4554,32 +4604,30 @@ export default function App() {
                                 setSelectedMethod(methodId);
                                 haptic('light');
                               }}
-                              className={`relative p-4 rounded-2xl cursor-pointer transition-all duration-200 border flex items-center justify-between gap-3 ${
-                                isSelected
-                                  ? 'bg-slate-900/95 border-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.3)] ring-2 ring-purple-500/60 scale-[1.02]'
-                                  : 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-300 border-white/10 hover:border-white/20'
+                              className={`relative p-4 rounded-2xl cursor-pointer transition-all duration-200 border flex items-center justify-between gap-3 ${cardBg} ${
+                                isSelected ? 'scale-[1.02]' : ''
                               }`}
                             >
                               {/* Left: Logo + Label & Type */}
                               <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-black/40 border border-white/10 flex-shrink-0 flex items-center justify-center">
+                                <div className="p-2 rounded-xl bg-black/50 border border-white/10 flex-shrink-0 flex items-center justify-center shadow-inner">
                                   {renderMethodLogo(method, 'w-8 h-8')}
                                 </div>
                                 <div>
                                   <h4 className="text-sm font-black text-white flex items-center gap-2">
                                     <span>{method.label}</span>
-                                    {method.isCrypto && (
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                                        Crypto
+                                    {isBinance && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 font-mono">
+                                        ⚡ Crypto / USD
                                       </span>
                                     )}
                                   </h4>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 font-mono font-bold text-slate-300">
-                                      {method.type || 'Send Money'}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${brandBadge}`}>
+                                      {brandSub}
                                     </span>
                                     {method.ussd && (
-                                      <span className="text-[10px] text-slate-400 font-mono">
+                                      <span className="text-[10px] text-slate-400 font-mono font-bold">
                                         {method.ussd}
                                       </span>
                                     )}
@@ -4591,7 +4639,17 @@ export default function App() {
                               <div
                                 className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition flex-shrink-0 ${
                                   isSelected
-                                    ? 'bg-purple-600 border-purple-400 text-white shadow-md'
+                                    ? isBkash
+                                      ? 'bg-[#e2136e] border-pink-300 text-white shadow-md'
+                                      : isNagad
+                                      ? 'bg-[#ea580c] border-orange-300 text-white shadow-md'
+                                      : isRocket
+                                      ? 'bg-[#8c3494] border-purple-300 text-white shadow-md'
+                                      : isUpay
+                                      ? 'bg-[#005696] border-cyan-300 text-white shadow-md'
+                                      : isBinance
+                                      ? 'bg-[#f0b90b] border-yellow-200 text-slate-950 font-black shadow-md'
+                                      : 'bg-emerald-600 border-emerald-300 text-white shadow-md'
                                     : 'border-white/20 bg-transparent'
                                 }`}
                               >
@@ -4693,10 +4751,10 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* PAYMENT METHOD SELECTOR TABS (Matching screenshot tabs) */}
+                    {/* PAYMENT METHOD SELECTOR TABS (With custom brand badge styling) */}
                     <div>
                       <p className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                        <span>নির্বাচিত পেমেন্ট মেথড:</span>
+                        <span>পেমেন্ট গেটওয়ে নির্বাচন:</span>
                         <button
                           type="button"
                           onClick={() => setDepositStep('method')}
@@ -4711,6 +4769,23 @@ export default function App() {
                           .map(([key, method]) => {
                             const methodId = method.id || key;
                             const isSelected = selectedMethod === methodId;
+                            const mKey = (method.iconType || method.id || method.label || key).toLowerCase();
+                            const isBkash = mKey.includes('bkash');
+                            const isNagad = mKey.includes('nagad');
+                            const isRocket = mKey.includes('rocket');
+                            const isUpay = mKey.includes('upay');
+                            const isBinance = mKey.includes('binance') || mKey.includes('crypto') || mKey.includes('usdt') || !!method.isCrypto;
+
+                            let tabStyle = 'bg-slate-900/70 hover:bg-slate-900 text-slate-400 border-white/10';
+                            if (isSelected) {
+                              if (isBkash) tabStyle = 'bg-gradient-to-r from-[#e2136e] to-[#9b0f49] text-white border-pink-300 shadow-[0_0_20px_rgba(226,19,110,0.5)] scale-105';
+                              else if (isNagad) tabStyle = 'bg-gradient-to-r from-[#ea580c] to-[#c2410c] text-white border-orange-300 shadow-[0_0_20px_rgba(234,88,12,0.5)] scale-105';
+                              else if (isRocket) tabStyle = 'bg-gradient-to-r from-[#8c3494] to-[#4c1d95] text-white border-purple-300 shadow-[0_0_20px_rgba(140,52,148,0.5)] scale-105';
+                              else if (isUpay) tabStyle = 'bg-gradient-to-r from-[#005696] to-[#003b73] text-white border-cyan-300 shadow-[0_0_20px_rgba(0,119,182,0.5)] scale-105';
+                              else if (isBinance) tabStyle = 'bg-gradient-to-r from-[#f0b90b] to-[#b48608] text-slate-950 font-black border-yellow-200 shadow-[0_0_20px_rgba(240,185,11,0.5)] scale-105';
+                              else tabStyle = 'bg-gradient-to-r from-emerald-600 to-teal-800 text-white border-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-105';
+                            }
+
                             return (
                               <div
                                 key={methodId}
@@ -4718,32 +4793,20 @@ export default function App() {
                                   setSelectedMethod(methodId);
                                   haptic('light');
                                 }}
-                                className={`relative flex items-center gap-2 py-2.5 px-4 rounded-2xl cursor-pointer transition-all flex-shrink-0 border ${
-                                  isSelected
-                                    ? 'bg-slate-900 text-white border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-purple-500/50 scale-105'
-                                    : 'bg-slate-900/70 hover:bg-slate-900 text-slate-400 border-white/10 hover:border-white/20'
-                                }`}
+                                className={`relative flex items-center gap-2 py-2 px-3.5 rounded-2xl cursor-pointer transition-all flex-shrink-0 border font-black text-xs ${tabStyle}`}
                               >
-                                {/* Checkmark Badge on Top Right */}
+                                {renderMethodLogo(method, 'w-5 h-5')}
+                                <span>{method.label}</span>
                                 {isSelected && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-black shadow-md border-2 border-slate-950 animate-in zoom-in-50 duration-150">
-                                    ✓
-                                  </div>
+                                  <span className="w-2 h-2 rounded-full bg-white shadow-sm animate-ping ml-0.5"></span>
                                 )}
-
-                                {/* Method Logo */}
-                                {renderMethodLogo(method, 'w-6 h-6')}
-
-                                <span className="font-black text-xs text-white whitespace-nowrap">
-                                  {method.label}
-                                </span>
                               </div>
                             );
                           })}
                       </div>
                     </div>
 
-                    {/* DYNAMIC BRANDED PAYMENT CARD (EXACT VERBATIM FROM USER SCREENSHOT) */}
+                    {/* DEDICATED DISTINCT BRANDED PAYMENT CARDS */}
                     {(() => {
                       const activeCfg = paymentMethodsConfig[selectedMethod] ||
                         (Object.values(paymentMethodsConfig) as PaymentMethodConfig[]).find((m) => m && (m.id === selectedMethod || m.label === selectedMethod)) || {
@@ -4756,30 +4819,1135 @@ export default function App() {
                           active: true
                         };
 
-                      const brandColor = activeCfg.color || '#e2136e';
-                      const methodLabelUpper = (activeCfg.label || selectedMethod).toUpperCase();
-                      const methodType = activeCfg.type || 'Send Money';
-                      const methodUssd = activeCfg.ussd || '*247#';
+                      const mKey = (activeCfg.iconType || activeCfg.id || activeCfg.label || selectedMethod).toLowerCase();
+                      const isBkash = mKey.includes('bkash');
+                      const isNagad = mKey.includes('nagad');
+                      const isRocket = mKey.includes('rocket');
+                      const isUpay = mKey.includes('upay');
+                      const isBinance = mKey.includes('binance') || mKey.includes('crypto') || mKey.includes('usdt') || !!activeCfg.isCrypto;
 
+                      const amountNum = parseFloat(depositAmount) || 0;
+                      const usdAmount = (amountNum / 120).toFixed(2);
+
+                      // 1. BKASH (বিকাশ) DEDICATED GATEWAY CARD
+                      if (isBkash) {
+                        return (
+                          <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-pink-400/40 bg-gradient-to-br from-[#a00947] via-[#e2136e] to-[#730630]">
+                            {/* Decorative ambient elements */}
+                            <div className="absolute top-0 right-0 w-56 h-56 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+                            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-pink-400/20 rounded-full blur-2xl pointer-events-none"></div>
+
+                            {/* bKash Header Badge */}
+                            <div className="flex items-center justify-between pb-4 mb-4 border-b border-pink-300/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                                  {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-black text-lg text-white tracking-wide">
+                                      বিকাশ পেমেন্ট গেটওয়ে
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/20 text-white font-extrabold border border-white/30">
+                                      bKash Personal
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-pink-100/90 font-medium mt-0.5">
+                                    {activeCfg.ussd || '*247#'} অথবা বিকাশ অ্যাপ দিয়ে সেন্ড মানি করুন
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Recipient Number Box */}
+                            <div className="p-3.5 rounded-2xl bg-black/40 backdrop-blur-md border border-pink-300/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-bold text-pink-200 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-mobile-alt text-amber-300"></i>
+                                  <span>বিকাশ পার্সোনাল নম্বর (সেন্ড মানি):</span>
+                                </span>
+                                <span className="text-[10px] text-pink-200 font-mono">Personal Send Money</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="font-mono font-black text-base sm:text-lg text-amber-300 tracking-widest select-all">
+                                  {activeCfg.number}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(activeCfg.number)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-pink-500/40 hover:bg-pink-500/60 text-white border border-pink-300/50 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <i className="fas fa-copy text-amber-300"></i>
+                                  <span>Copy Number</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 5-Step bKash Guidelines */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed bg-black/25 p-3.5 rounded-2xl border border-pink-400/20 mb-4">
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#e2136e] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ১
+                                </span>
+                                <span>
+                                  বিকাশ অ্যাপ ওপেন করুন অথবা ডায়াল করুন <strong>*247#</strong>
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#e2136e] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ২
+                                </span>
+                                <span>
+                                  <strong>Send Money</strong> (সেন্ড মানি) অপশন নির্বাচন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#e2136e] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৩
+                                </span>
+                                <span>
+                                  প্রাপক নম্বর বক্সে <strong>{activeCfg.number}</strong> লিখুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#e2136e] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৪
+                                </span>
+                                <span>
+                                  টাকার পরিমাণ <strong>৳ {amountNum}</strong> লিখে আপনার বিকাশ <strong>PIN</strong> দিয়ে লেনদেন সম্পন্ন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#e2136e] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৫
+                                </span>
+                                <span>
+                                  লেনদেনের পর মেসেজে আসা <strong>TrxID (১০ ডিজিট)</strong> নিচের বক্সে দিন
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Transaction ID Input */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-black text-white mb-1.5 flex items-center justify-between">
+                                <span>বিকাশ ট্রানজেকশন আইডি দিন (bKash TrxID):</span>
+                                <span className="text-[10px] text-pink-200 font-mono">Example: BLM6AK9012</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-widest"
+                                placeholder="এখানে bKash TrxID লিখুন"
+                                value={depositTrxId}
+                                onChange={(e) => {
+                                  setDepositTrxId(e.target.value);
+                                  setDepTrxErr('');
+                                }}
+                              />
+                              {depTrxErr && (
+                                <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/60 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/40">
+                                  ⚠️ {depTrxErr}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Screenshot Upload */}
+                            <div className="mb-5 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-pink-300/30 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <i className="fas fa-camera text-yellow-300"></i>
+                                  <span>পেমেন্ট স্ক্রিনশট বা স্লিপ আপলোড (ঐচ্ছিক):</span>
+                                </label>
+                                {depositReceiptImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepositReceiptImage('');
+                                      setDepositReceiptFileName('');
+                                      haptic('light');
+                                    }}
+                                    className="text-[10px] text-pink-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-times"></i> ছবি মুছুন
+                                  </button>
+                                )}
+                              </div>
+
+                              {depositReceiptImage ? (
+                                <div className="relative rounded-xl overflow-hidden border-2 border-pink-300/60 bg-black/60 p-2 flex items-center gap-3">
+                                  <img
+                                    src={depositReceiptImage}
+                                    alt="bKash Screenshot"
+                                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                      <i className="fas fa-check-circle"></i>
+                                      <span>স্ক্রিনশট যুক্ত হয়েছে!</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
+                                      {depositReceiptFileName || 'bkash_receipt.png'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-pink-300/40 hover:border-white bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleDepositReceiptUpload}
+                                  />
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <i className="fas fa-cloud-upload-alt text-amber-300"></i>
+                                    <span>বিকাশ পেমেন্ট স্ক্রিনশট সিলেক্ট করুন</span>
+                                  </span>
+                                  <span className="text-[10px] text-pink-200/80 mt-0.5">
+                                    JPG, PNG (সর্বোচ্চ ৮MB)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={handleSubmitDeposit}
+                              disabled={depositSubmitting}
+                              className="w-full py-4 rounded-2xl bg-white hover:bg-pink-50 text-[#e2136e] font-black text-base sm:text-lg tracking-wider uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-white/80"
+                            >
+                              {depositSubmitting ? (
+                                <span className="loading-spinner"></span>
+                              ) : (
+                                <>
+                                  <span>বিকাশ ভেরিফাই করুন (VERIFY bKash)</span>
+                                  <i className="fas fa-check-circle text-emerald-600 text-lg"></i>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // 2. NAGAD (নগদ) DEDICATED GATEWAY CARD
+                      if (isNagad) {
+                        return (
+                          <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-orange-400/40 bg-gradient-to-br from-[#9a3412] via-[#ea580c] to-[#7c2d12]">
+                            {/* Decorative ambient elements */}
+                            <div className="absolute top-0 right-0 w-56 h-56 bg-amber-400/15 rounded-full blur-3xl pointer-events-none"></div>
+                            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-orange-400/20 rounded-full blur-2xl pointer-events-none"></div>
+
+                            {/* Nagad Header Badge */}
+                            <div className="flex items-center justify-between pb-4 mb-4 border-b border-orange-300/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                                  {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-black text-lg text-white tracking-wide">
+                                      নগদ পেমেন্ট গেটওয়ে
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/20 text-white font-extrabold border border-white/30">
+                                      ডাক বিভাগ অনুমোদিত
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-orange-100/90 font-medium mt-0.5">
+                                    {activeCfg.ussd || '*167#'} ডায়াল অথবা নগদ অ্যাপ দিয়ে সেন্ড মানি করুন
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Recipient Number Box */}
+                            <div className="p-3.5 rounded-2xl bg-black/40 backdrop-blur-md border border-orange-300/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-bold text-orange-200 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-mobile-alt text-amber-300"></i>
+                                  <span>নগদ একাউন্ট নম্বর (Send Money):</span>
+                                </span>
+                                <span className="text-[10px] text-orange-200 font-mono">Nagad Personal</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="font-mono font-black text-base sm:text-lg text-amber-300 tracking-widest select-all">
+                                  {activeCfg.number}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(activeCfg.number)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-orange-500/40 hover:bg-orange-500/60 text-white border border-orange-300/50 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <i className="fas fa-copy text-amber-300"></i>
+                                  <span>Copy Nagad</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 5-Step Nagad Guidelines */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed bg-black/25 p-3.5 rounded-2xl border border-orange-400/20 mb-4">
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#ea580c] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ১
+                                </span>
+                                <span>
+                                  নগদ অ্যাপ ওপেন করুন অথবা ডায়াল প্যাডে ডায়াল করুন <strong>*167#</strong>
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#ea580c] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ২
+                                </span>
+                                <span>
+                                  মেনু থেকে <strong>Send Money</strong> (সেন্ড মানি) অপশন নির্বাচন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#ea580c] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৩
+                                </span>
+                                <span>
+                                  প্রাপক নগদ নম্বরে <strong>{activeCfg.number}</strong> টাইপ করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#ea580c] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৪
+                                </span>
+                                <span>
+                                  টাকার পরিমাণ <strong>৳ {amountNum}</strong> ও আপনার নগদ <strong>PIN</strong> দিয়ে ট্যাপ করে ধরে রাখুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#ea580c] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৫
+                                </span>
+                                <span>
+                                  লেনদেন সফল হলে স্ক্রিন বা এসএমএস-এর <strong>Txn ID (৮ ডিজিট)</strong> নিচে দিন
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Transaction ID Input */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-black text-white mb-1.5 flex items-center justify-between">
+                                <span>নগদ ট্রানজেকশন আইডি দিন (Nagad TxnID):</span>
+                                <span className="text-[10px] text-orange-200 font-mono">Example: 7NB82M94</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-widest"
+                                placeholder="এখানে Nagad Txn ID লিখুন"
+                                value={depositTrxId}
+                                onChange={(e) => {
+                                  setDepositTrxId(e.target.value);
+                                  setDepTrxErr('');
+                                }}
+                              />
+                              {depTrxErr && (
+                                <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/60 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/40">
+                                  ⚠️ {depTrxErr}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Screenshot Upload */}
+                            <div className="mb-5 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-orange-300/30 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <i className="fas fa-camera text-yellow-300"></i>
+                                  <span>নগদ পেমেন্ট স্ক্রিনশট (ঐচ্ছিক):</span>
+                                </label>
+                                {depositReceiptImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepositReceiptImage('');
+                                      setDepositReceiptFileName('');
+                                      haptic('light');
+                                    }}
+                                    className="text-[10px] text-orange-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-times"></i> ছবি মুছুন
+                                  </button>
+                                )}
+                              </div>
+
+                              {depositReceiptImage ? (
+                                <div className="relative rounded-xl overflow-hidden border-2 border-orange-300/60 bg-black/60 p-2 flex items-center gap-3">
+                                  <img
+                                    src={depositReceiptImage}
+                                    alt="Nagad Screenshot"
+                                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                      <i className="fas fa-check-circle"></i>
+                                      <span>স্ক্রিনশট যুক্ত হয়েছে!</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
+                                      {depositReceiptFileName || 'nagad_receipt.png'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-orange-300/40 hover:border-white bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleDepositReceiptUpload}
+                                  />
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <i className="fas fa-cloud-upload-alt text-amber-300"></i>
+                                    <span>নগদ পেমেন্ট স্ক্রিনশট সিলেক্ট করুন</span>
+                                  </span>
+                                  <span className="text-[10px] text-orange-200/80 mt-0.5">
+                                    JPG, PNG (সর্বোচ্চ ৮MB)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={handleSubmitDeposit}
+                              disabled={depositSubmitting}
+                              className="w-full py-4 rounded-2xl bg-white hover:bg-orange-50 text-[#ea580c] font-black text-base sm:text-lg tracking-wider uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-white/80"
+                            >
+                              {depositSubmitting ? (
+                                <span className="loading-spinner"></span>
+                              ) : (
+                                <>
+                                  <span>নগদ ভেরিফাই করুন (VERIFY NAGAD)</span>
+                                  <i className="fas fa-check-circle text-emerald-600 text-lg"></i>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // 3. ROCKET (রকেট - ডাচ বাংলা ব্যাংক) DEDICATED GATEWAY CARD
+                      if (isRocket) {
+                        return (
+                          <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-purple-400/40 bg-gradient-to-br from-[#4c1d95] via-[#8c3494] to-[#2e1065]">
+                            {/* Decorative ambient elements */}
+                            <div className="absolute top-0 right-0 w-56 h-56 bg-purple-400/15 rounded-full blur-3xl pointer-events-none"></div>
+                            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-violet-400/20 rounded-full blur-2xl pointer-events-none"></div>
+
+                            {/* Rocket Header Badge */}
+                            <div className="flex items-center justify-between pb-4 mb-4 border-b border-purple-300/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                                  {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-black text-lg text-white tracking-wide">
+                                      রকেট পেমেন্ট গেটওয়ে
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/20 text-white font-extrabold border border-white/30">
+                                      DBBL Rocket
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-purple-200 font-medium mt-0.5">
+                                    {activeCfg.ussd || '*322#'} ডায়াল অথবা রকেট অ্যাপ দিয়ে টাকা পাঠান
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Recipient Number Box */}
+                            <div className="p-3.5 rounded-2xl bg-black/40 backdrop-blur-md border border-purple-300/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-bold text-purple-200 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-mobile-alt text-amber-300"></i>
+                                  <span>রকেট ১২-ডিজিট একাউন্ট নম্বর:</span>
+                                </span>
+                                <span className="text-[10px] text-purple-200 font-mono">12-Digit Account</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="font-mono font-black text-base sm:text-lg text-amber-300 tracking-widest select-all">
+                                  {activeCfg.number}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(activeCfg.number)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-purple-500/40 hover:bg-purple-500/60 text-white border border-purple-300/50 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <i className="fas fa-copy text-amber-300"></i>
+                                  <span>Copy Rocket</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 5-Step Rocket Guidelines */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed bg-black/25 p-3.5 rounded-2xl border border-purple-400/20 mb-4">
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#8c3494] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ১
+                                </span>
+                                <span>
+                                  রকেট অ্যাপ ওপেন করুন অথবা ডায়াল করুন <strong>*322#</strong>
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#8c3494] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ২
+                                </span>
+                                <span>
+                                  <strong>Send Money</strong> নির্বাচন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#8c3494] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৩
+                                </span>
+                                <span>
+                                  প্রাপক রকেট একাউন্ট নম্বরে <strong>{activeCfg.number}</strong> দিন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#8c3494] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৪
+                                </span>
+                                <span>
+                                  টাকার পরিমাণ <strong>৳ {amountNum}</strong> দিয়ে রকেট <strong>PIN</strong> দিয়ে সম্পন্ন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#8c3494] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৫
+                                </span>
+                                <span>
+                                  ফিরতি মেসেজে আসা <strong>Txn ID</strong> নিচের বক্সে দিন
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Transaction ID Input */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-black text-white mb-1.5 flex items-center justify-between">
+                                <span>রকেট ট্রানজেকশন আইডি দিন (Rocket TxnID):</span>
+                                <span className="text-[10px] text-purple-200 font-mono">Example: 2984716253</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-widest"
+                                placeholder="এখানে Rocket Txn ID লিখুন"
+                                value={depositTrxId}
+                                onChange={(e) => {
+                                  setDepositTrxId(e.target.value);
+                                  setDepTrxErr('');
+                                }}
+                              />
+                              {depTrxErr && (
+                                <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/60 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/40">
+                                  ⚠️ {depTrxErr}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Screenshot Upload */}
+                            <div className="mb-5 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-purple-300/30 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <i className="fas fa-camera text-yellow-300"></i>
+                                  <span>রকেট পেমেন্ট স্লিপ / স্ক্রিনশট (ঐচ্ছিক):</span>
+                                </label>
+                                {depositReceiptImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepositReceiptImage('');
+                                      setDepositReceiptFileName('');
+                                      haptic('light');
+                                    }}
+                                    className="text-[10px] text-purple-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-times"></i> ছবি মুছুন
+                                  </button>
+                                )}
+                              </div>
+
+                              {depositReceiptImage ? (
+                                <div className="relative rounded-xl overflow-hidden border-2 border-purple-300/60 bg-black/60 p-2 flex items-center gap-3">
+                                  <img
+                                    src={depositReceiptImage}
+                                    alt="Rocket Screenshot"
+                                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                      <i className="fas fa-check-circle"></i>
+                                      <span>স্ক্রিনশট যুক্ত হয়েছে!</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
+                                      {depositReceiptFileName || 'rocket_receipt.png'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-purple-300/40 hover:border-white bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleDepositReceiptUpload}
+                                  />
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <i className="fas fa-cloud-upload-alt text-amber-300"></i>
+                                    <span>রকেট পেমেন্ট স্ক্রিনশট সিলেক্ট করুন</span>
+                                  </span>
+                                  <span className="text-[10px] text-purple-200/80 mt-0.5">
+                                    JPG, PNG (সর্বোচ্চ ৮MB)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={handleSubmitDeposit}
+                              disabled={depositSubmitting}
+                              className="w-full py-4 rounded-2xl bg-white hover:bg-purple-50 text-[#8c3494] font-black text-base sm:text-lg tracking-wider uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-white/80"
+                            >
+                              {depositSubmitting ? (
+                                <span className="loading-spinner"></span>
+                              ) : (
+                                <>
+                                  <span>রকেট ভেরিফাই করুন (VERIFY ROCKET)</span>
+                                  <i className="fas fa-check-circle text-emerald-600 text-lg"></i>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // 4. UPAY (উপায় - UCB FINTECH) DEDICATED GATEWAY CARD
+                      if (isUpay) {
+                        return (
+                          <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-cyan-400/40 bg-gradient-to-br from-[#00284d] via-[#005696] to-[#00172e]">
+                            {/* Decorative ambient elements */}
+                            <div className="absolute top-0 right-0 w-56 h-56 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none"></div>
+                            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-blue-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+                            {/* Upay Header Badge */}
+                            <div className="flex items-center justify-between pb-4 mb-4 border-b border-cyan-300/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                                  {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-black text-lg text-white tracking-wide">
+                                      উপায় পেমেন্ট গেটওয়ে
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/20 text-cyan-200 font-extrabold border border-white/30">
+                                      UCB Fintech
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-cyan-200 font-medium mt-0.5">
+                                    {activeCfg.ussd || '*268#'} ডায়াল অথবা উপায় অ্যাপ দিয়ে সেন্ড মানি করুন
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Recipient Number Box */}
+                            <div className="p-3.5 rounded-2xl bg-black/40 backdrop-blur-md border border-cyan-300/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-bold text-cyan-200 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-mobile-alt text-amber-300"></i>
+                                  <span>উপায় ওয়ালেট নম্বর:</span>
+                                </span>
+                                <span className="text-[10px] text-cyan-200 font-mono">Upay Wallet</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="font-mono font-black text-base sm:text-lg text-amber-300 tracking-widest select-all">
+                                  {activeCfg.number}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(activeCfg.number)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-cyan-600/40 hover:bg-cyan-600/60 text-white border border-cyan-300/50 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <i className="fas fa-copy text-amber-300"></i>
+                                  <span>Copy Upay</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 5-Step Upay Guidelines */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed bg-black/25 p-3.5 rounded-2xl border border-cyan-400/20 mb-4">
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#005696] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ১
+                                </span>
+                                <span>
+                                  উপায় অ্যাপ ওপেন করুন অথবা ডায়াল করুন <strong>*268#</strong>
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#005696] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ২
+                                </span>
+                                <span>
+                                  <strong>Send Money</strong> নির্বাচন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#005696] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৩
+                                </span>
+                                <span>
+                                  প্রাপক উপায় ওয়ালেট নম্বর হিসেবে <strong>{activeCfg.number}</strong> দিন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#005696] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৪
+                                </span>
+                                <span>
+                                  টাকার পরিমাণ <strong>৳ {amountNum}</strong> ও আপনার উপায় <strong>PIN</strong> দিয়ে সম্পন্ন করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-white text-[#005696] font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৫
+                                </span>
+                                <span>
+                                  ফিরতি মেসেজে পাওয়া <strong>TrxID</strong> নিচের বক্সে দিন
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Transaction ID Input */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-black text-white mb-1.5 flex items-center justify-between">
+                                <span>উপায় ট্রানজেকশন আইডি দিন (Upay TrxID):</span>
+                                <span className="text-[10px] text-cyan-200 font-mono">Example: UP18492048</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-widest"
+                                placeholder="এখানে Upay Trx ID লিখুন"
+                                value={depositTrxId}
+                                onChange={(e) => {
+                                  setDepositTrxId(e.target.value);
+                                  setDepTrxErr('');
+                                }}
+                              />
+                              {depTrxErr && (
+                                <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/60 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/40">
+                                  ⚠️ {depTrxErr}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Screenshot Upload */}
+                            <div className="mb-5 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-cyan-300/30 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <i className="fas fa-camera text-yellow-300"></i>
+                                  <span>উপায় পেমেন্ট স্ক্রিনশট (ঐচ্ছিক):</span>
+                                </label>
+                                {depositReceiptImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepositReceiptImage('');
+                                      setDepositReceiptFileName('');
+                                      haptic('light');
+                                    }}
+                                    className="text-[10px] text-cyan-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-times"></i> ছবি মুছুন
+                                  </button>
+                                )}
+                              </div>
+
+                              {depositReceiptImage ? (
+                                <div className="relative rounded-xl overflow-hidden border-2 border-cyan-300/60 bg-black/60 p-2 flex items-center gap-3">
+                                  <img
+                                    src={depositReceiptImage}
+                                    alt="Upay Screenshot"
+                                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                      <i className="fas fa-check-circle"></i>
+                                      <span>স্ক্রিনশট যুক্ত হয়েছে!</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
+                                      {depositReceiptFileName || 'upay_receipt.png'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-cyan-300/40 hover:border-white bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleDepositReceiptUpload}
+                                  />
+                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <i className="fas fa-cloud-upload-alt text-amber-300"></i>
+                                    <span>উপায় পেমেন্ট স্ক্রিনশট সিলেক্ট করুন</span>
+                                  </span>
+                                  <span className="text-[10px] text-cyan-200/80 mt-0.5">
+                                    JPG, PNG (সর্বোচ্চ ৮MB)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={handleSubmitDeposit}
+                              disabled={depositSubmitting}
+                              className="w-full py-4 rounded-2xl bg-white hover:bg-cyan-50 text-[#005696] font-black text-base sm:text-lg tracking-wider uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-white/80"
+                            >
+                              {depositSubmitting ? (
+                                <span className="loading-spinner"></span>
+                              ) : (
+                                <>
+                                  <span>উপায় ভেরিফাই করুন (VERIFY UPAY)</span>
+                                  <i className="fas fa-check-circle text-emerald-600 text-lg"></i>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // 5. BINANCE / USDT / CRYPTO DEDICATED GATEWAY CARD
+                      if (isBinance) {
+                        return (
+                          <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-yellow-400/50 bg-gradient-to-br from-[#1e2329] via-[#12161a] to-[#0b0e11]">
+                            {/* Decorative ambient elements */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/15 rounded-full blur-3xl pointer-events-none"></div>
+                            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-amber-500/15 rounded-full blur-2xl pointer-events-none"></div>
+
+                            {/* Binance Header Badge */}
+                            <div className="flex items-center justify-between pb-4 mb-4 border-b border-yellow-500/30">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-[#f0b90b] p-1.5 shadow-lg flex items-center justify-center">
+                                  {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-black text-lg text-yellow-400 tracking-wide font-mono">
+                                      BINANCE PAY & USDT
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#f0b90b]/20 text-yellow-300 font-extrabold border border-[#f0b90b]/40 font-mono">
+                                      0% Fee
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-300 font-medium mt-0.5">
+                                    Binance Pay UID অথবা USDT (BEP20 / TRC20) নেটওয়ার্কে পে করুন
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Real-time Crypto USD Rate & Calculator Banner */}
+                            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-yellow-950/40 via-amber-950/50 to-slate-900/80 border border-yellow-500/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] font-extrabold text-yellow-400 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-calculator text-yellow-300"></i>
+                                  <span>USD ডলার কনভার্শন রেট (1 USDT = ৳120):</span>
+                                </span>
+                                <span className="text-[10px] text-amber-300 font-mono font-bold">Instant Rate</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <div>
+                                  <span className="font-mono font-black text-xl sm:text-2xl text-yellow-300 tracking-wider">
+                                    $ {usdAmount} <span className="text-xs text-slate-400 font-normal">USD / USDT</span>
+                                  </span>
+                                  <span className="text-[11px] text-slate-400 block font-mono mt-0.5">
+                                    (Equivalent to ৳ {amountNum} BDT)
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(usdAmount)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border border-yellow-400/40 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm font-mono"
+                                >
+                                  <i className="fas fa-copy text-yellow-400"></i>
+                                  <span>Copy ${usdAmount}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Binance Pay UID / Wallet Box */}
+                            <div className="p-3.5 rounded-2xl bg-black/60 backdrop-blur-md border border-yellow-500/40 mb-4 shadow-inner">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-1.5">
+                                  <i className="fas fa-wallet text-yellow-400"></i>
+                                  <span>Binance Pay ID / UID (বা ওয়ালেট এড্রেস):</span>
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono">Binance Pay</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="font-mono font-black text-base sm:text-lg text-yellow-300 tracking-widest select-all">
+                                  {activeCfg.number}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyNumber(activeCfg.number)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-[#f0b90b] hover:bg-yellow-400 text-slate-950 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                  <i className="fas fa-copy text-slate-900"></i>
+                                  <span>Copy UID</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 5-Step Binance Guidelines */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-slate-200 leading-relaxed bg-black/40 p-3.5 rounded-2xl border border-yellow-500/20 mb-4">
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-[#f0b90b] text-slate-950 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ১
+                                </span>
+                                <span>
+                                  Binance App ওপেন করে <strong>Pay</strong> অথবা <strong>Send</strong> অপশনে যান (বা Trust Wallet)
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-[#f0b90b] text-slate-950 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ২
+                                </span>
+                                <span>
+                                  <strong>Pay ID / Binance UID</strong> অথবা USDT নেটওয়ার্ক সিলেক্ট করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-[#f0b90b] text-slate-950 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৩
+                                </span>
+                                <span>
+                                  Payee ID হিসেবে <strong>{activeCfg.number}</strong> দিন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-[#f0b90b] text-slate-950 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৪
+                                </span>
+                                <span>
+                                  সঠিক পরিমাণ <strong>${usdAmount} USD</strong> পাঠিয়ে লেনদেন নিশ্চিত করুন
+                                </span>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <span className="w-5 h-5 rounded-full bg-[#f0b90b] text-slate-950 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                  ৫
+                                </span>
+                                <span>
+                                  লেনদেনের <strong>Order ID / TxID / Transaction Hash</strong> নিচের বক্সে দিন
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Transaction ID Input */}
+                            <div className="mb-4">
+                              <label className="block text-xs font-black text-yellow-300 mb-1.5 flex items-center justify-between">
+                                <span>Binance Order ID / TxID / Hash দিন:</span>
+                                <span className="text-[10px] text-slate-400 font-mono">Example: 3948201948</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="w-full bg-slate-950 text-yellow-300 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-yellow-500/60 focus:border-yellow-300 focus:outline-none focus:ring-4 focus:ring-yellow-400/20 uppercase placeholder:text-slate-500 shadow-lg text-center tracking-widest"
+                                placeholder="Binance Order ID / Hash লিখুন"
+                                value={depositTrxId}
+                                onChange={(e) => {
+                                  setDepositTrxId(e.target.value);
+                                  setDepTrxErr('');
+                                }}
+                              />
+                              {depTrxErr && (
+                                <p className="text-xs font-bold text-yellow-300 mt-2 bg-black/80 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/50">
+                                  ⚠️ {depTrxErr}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Screenshot Upload */}
+                            <div className="mb-5 p-3 rounded-2xl bg-black/40 backdrop-blur-md border border-yellow-500/30 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-yellow-200 flex items-center gap-1.5">
+                                  <i className="fas fa-camera text-yellow-400"></i>
+                                  <span>Binance পেমেন্ট স্ক্রিনশট (ঐচ্ছিক):</span>
+                                </label>
+                                {depositReceiptImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDepositReceiptImage('');
+                                      setDepositReceiptFileName('');
+                                      haptic('light');
+                                    }}
+                                    className="text-[10px] text-yellow-300 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-times"></i> ছবি মুছুন
+                                  </button>
+                                )}
+                              </div>
+
+                              {depositReceiptImage ? (
+                                <div className="relative rounded-xl overflow-hidden border-2 border-yellow-400/60 bg-black/60 p-2 flex items-center gap-3">
+                                  <img
+                                    src={depositReceiptImage}
+                                    alt="Binance Screenshot"
+                                    className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
+                                      <i className="fas fa-check-circle"></i>
+                                      <span>স্ক্রিনশট যুক্ত হয়েছে!</span>
+                                    </p>
+                                    <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
+                                      {depositReceiptFileName || 'binance_receipt.png'}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-yellow-400/40 hover:border-yellow-300 bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleDepositReceiptUpload}
+                                  />
+                                  <span className="text-xs font-bold text-yellow-300 flex items-center gap-1.5">
+                                    <i className="fas fa-cloud-upload-alt text-yellow-400"></i>
+                                    <span>Binance পেমেন্ট স্ক্রিনশট সিলেক্ট করুন</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 mt-0.5">
+                                    JPG, PNG (সর্বোচ্চ ৮MB)
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Verify Button */}
+                            <button
+                              type="button"
+                              onClick={handleSubmitDeposit}
+                              disabled={depositSubmitting}
+                              className="w-full py-4 rounded-2xl bg-[#f0b90b] hover:bg-yellow-400 text-slate-950 font-black text-base sm:text-lg tracking-wider uppercase shadow-[0_0_25px_rgba(240,185,11,0.4)] transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-yellow-300"
+                            >
+                              {depositSubmitting ? (
+                                <span className="loading-spinner"></span>
+                              ) : (
+                                <>
+                                  <span>VERIFY BINANCE PAYMENT</span>
+                                  <i className="fas fa-check-circle text-slate-950 text-lg"></i>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // 6. BANK TRANSFER / OTHER CUSTOM METHODS DEDICATED GATEWAY CARD
                       return (
-                        <div
-                          className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-white/20"
-                          style={{ backgroundColor: brandColor }}
-                        >
-                          {/* Background subtle glow decoration */}
-                          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="rounded-3xl p-5 sm:p-7 text-white shadow-2xl transition-all duration-300 relative overflow-hidden border border-emerald-400/40 bg-gradient-to-br from-[#064e3b] via-[#0f766e] to-[#022c22]">
+                          {/* Decorative ambient elements */}
+                          <div className="absolute top-0 right-0 w-56 h-56 bg-emerald-400/15 rounded-full blur-3xl pointer-events-none"></div>
 
-                          {/* Title: ট্রানজেকশন আইডি দিন */}
-                          <h3 className="text-center font-black text-base sm:text-lg text-white mb-4 tracking-wide drop-shadow-sm">
-                            ট্রানজেকশন আইডি দিন
-                          </h3>
+                          {/* Bank Header Badge */}
+                          <div className="flex items-center justify-between pb-4 mb-4 border-b border-emerald-300/30">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                                {renderMethodLogo(activeCfg, 'w-9 h-9')}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-black text-lg text-white tracking-wide">
+                                    {activeCfg.label || selectedMethod} পেমেন্ট গেটওয়ে
+                                  </h3>
+                                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/20 text-emerald-200 font-extrabold border border-white/30">
+                                    Bank / Custom
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-emerald-100 font-medium mt-0.5">
+                                  নিচের একাউন্টে টাকা পাঠিয়ে ট্রানজেকশন আইডি দিন
+                                </p>
+                              </div>
+                            </div>
+                          </div>
 
-                          {/* Input Box for Transaction ID */}
+                          {/* Recipient Number / Account Box */}
+                          <div className="p-3.5 rounded-2xl bg-black/40 backdrop-blur-md border border-emerald-300/40 mb-4 shadow-inner">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
+                                <i className="fas fa-university text-amber-300"></i>
+                                <span>ব্যাংক একাউন্ট নম্বর:</span>
+                              </span>
+                              <span className="text-[10px] text-emerald-200 font-mono">Account / Wallet</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-1">
+                              <span className="font-mono font-black text-base sm:text-lg text-amber-300 tracking-widest select-all">
+                                {activeCfg.number}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => copyNumber(activeCfg.number)}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600/40 hover:bg-emerald-600/60 text-white border border-emerald-300/50 font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
+                              >
+                                <i className="fas fa-copy text-amber-300"></i>
+                                <span>Copy Details</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Instructions */}
+                          <div className="space-y-2.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed bg-black/25 p-3.5 rounded-2xl border border-emerald-400/20 mb-4">
+                            <div className="flex items-start gap-2.5">
+                              <span className="w-5 h-5 rounded-full bg-white text-emerald-800 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                ১
+                              </span>
+                              <span>
+                                আপনার ব্যাংক অ্যাপ অথবা শাখা থেকে টাকা পাঠান
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2.5">
+                              <span className="w-5 h-5 rounded-full bg-white text-emerald-800 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                ২
+                              </span>
+                              <span>
+                                প্রাপক হিসেবে <strong>{activeCfg.number}</strong> নম্বরে <strong>৳ {amountNum}</strong> পাঠান
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2.5">
+                              <span className="w-5 h-5 rounded-full bg-white text-emerald-800 font-black text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                                ৩
+                              </span>
+                              <span>
+                                পেমেন্ট সম্পন্ন করে ব্যাংক <strong>Reference No / Transaction ID</strong> নিচের বক্সে দিন
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Transaction ID Input */}
                           <div className="mb-4">
+                            <label className="block text-xs font-black text-white mb-1.5 flex items-center justify-between">
+                              <span>ট্রানজেকশন আইডি / রেফারেন্স নম্বর দিন:</span>
+                              <span className="text-[10px] text-emerald-200 font-mono">Reference ID</span>
+                            </label>
                             <input
                               type="text"
-                              className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-wider"
-                              placeholder="ট্রানজেকশন আইডি দিন"
+                              className="w-full bg-white text-slate-950 font-black font-mono text-sm sm:text-base px-4 py-3.5 rounded-xl border-2 border-white/60 focus:border-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-300/30 uppercase placeholder:text-slate-400 shadow-lg text-center tracking-widest"
+                              placeholder="Transaction / Ref ID লিখুন"
                               value={depositTrxId}
                               onChange={(e) => {
                                 setDepositTrxId(e.target.value);
@@ -4787,18 +5955,18 @@ export default function App() {
                               }}
                             />
                             {depTrxErr && (
-                              <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/50 px-3 py-1.5 rounded-lg text-center shadow">
+                              <p className="text-xs font-bold text-yellow-200 mt-2 bg-black/60 px-3 py-1.5 rounded-lg text-center shadow border border-yellow-400/40">
                                 ⚠️ {depTrxErr}
                               </p>
                             )}
                           </div>
 
-                          {/* DIRECT IMAGE / SCREENSHOT UPLOAD SECTION */}
-                          <div className="mb-5 p-3 sm:p-4 rounded-2xl bg-black/35 backdrop-blur-md border border-white/30 space-y-2">
+                          {/* Screenshot Upload */}
+                          <div className="mb-5 p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-emerald-300/30 space-y-2">
                             <div className="flex items-center justify-between">
-                              <label className="text-xs font-extrabold text-white flex items-center gap-1.5">
+                              <label className="text-xs font-bold text-white flex items-center gap-1.5">
                                 <i className="fas fa-camera text-yellow-300"></i>
-                                <span>পেমেন্ট স্ক্রিনশট বা স্লিপ আপলোড (ঐচ্ছিক / Proof Image):</span>
+                                <span>পেমেন্ট স্লিপ বা স্ক্রিনশট (ঐচ্ছিক):</span>
                               </label>
                               {depositReceiptImage && (
                                 <button
@@ -4808,7 +5976,7 @@ export default function App() {
                                     setDepositReceiptFileName('');
                                     haptic('light');
                                   }}
-                                  className="text-[10px] text-red-300 hover:text-red-100 font-bold underline flex items-center gap-1 cursor-pointer"
+                                  className="text-[10px] text-emerald-200 hover:text-white font-bold underline flex items-center gap-1 cursor-pointer"
                                 >
                                   <i className="fas fa-times"></i> ছবি মুছুন
                                 </button>
@@ -4816,128 +5984,55 @@ export default function App() {
                             </div>
 
                             {depositReceiptImage ? (
-                              <div className="relative rounded-xl overflow-hidden border-2 border-amber-300/60 bg-black/60 p-2 flex items-center gap-3">
+                              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-300/60 bg-black/60 p-2 flex items-center gap-3">
                                 <img
                                   src={depositReceiptImage}
-                                  alt="Deposit Screenshot"
-                                  className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
+                                  alt="Bank Screenshot"
+                                  className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg border border-white/20 cursor-pointer shadow-md"
                                   onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
                                 />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-bold text-emerald-300 flex items-center gap-1">
                                     <i className="fas fa-check-circle"></i>
-                                    <span>ছবি যুক্ত হয়েছে!</span>
+                                    <span>রসিদের ছবি যুক্ত হয়েছে!</span>
                                   </p>
                                   <p className="text-[10px] text-slate-300 truncate font-mono mt-0.5">
-                                    {depositReceiptFileName || 'receipt_screenshot.png'}
+                                    {depositReceiptFileName || 'bank_slip.png'}
                                   </p>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedScreenshotPreview(depositReceiptImage)}
-                                    className="text-[10px] font-extrabold text-amber-300 hover:underline mt-1 block"
-                                  >
-                                    <i className="fas fa-eye mr-1"></i>বড় করে দেখুন
-                                  </button>
                                 </div>
                               </div>
                             ) : (
-                              <label className="relative flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 border-dashed border-white/40 hover:border-white/80 bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
+                              <label className="relative flex flex-col items-center justify-center p-3 rounded-xl border-2 border-dashed border-emerald-300/40 hover:border-white bg-white/5 hover:bg-white/10 cursor-pointer transition text-center group">
                                 <input
                                   type="file"
                                   accept="image/*"
                                   className="hidden"
                                   onChange={handleDepositReceiptUpload}
                                 />
-                                <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-white mb-1.5 group-hover:scale-110 transition">
-                                  <i className="fas fa-cloud-upload-alt text-base text-yellow-300"></i>
-                                </div>
-                                <span className="text-xs font-bold text-white">
-                                  ছবি নির্বাচন করতে এখানে ক্লিক করুন
+                                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <i className="fas fa-cloud-upload-alt text-amber-300"></i>
+                                  <span>পেমেন্ট স্লিপের ছবি সিলেক্ট করুন</span>
                                 </span>
-                                <span className="text-[10px] text-white/70 mt-0.5">
-                                  JPG, PNG, WEBP (সর্বোচ্চ ৮MB)
+                                <span className="text-[10px] text-emerald-200/80 mt-0.5">
+                                  JPG, PNG (সর্বোচ্চ ৮MB)
                                 </span>
                               </label>
                             )}
                           </div>
 
-                          {/* Exact 5 Instructions List Matching User Screenshot */}
-                          <div className="space-y-3.5 text-xs sm:text-sm font-semibold text-white/95 leading-relaxed">
-                            {/* Bullet 1 */}
-                            <div className="flex items-start gap-2.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-white flex-shrink-0 mt-1.5 shadow-sm"></span>
-                              <span>
-                                <strong>{methodUssd}</strong> ডায়াল করে আপনার <strong>{methodLabelUpper}</strong> মোবাইল মেনুতে যান অথবা <strong>{methodLabelUpper}</strong> অ্যাপ এ যান ।
-                              </span>
-                            </div>
-
-                            {/* Bullet 2 */}
-                            <div className="flex items-start gap-2.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-white flex-shrink-0 mt-1.5 shadow-sm"></span>
-                              <span>
-                                <strong>{methodType}</strong> - এ ক্লিক করুন ।
-                              </span>
-                            </div>
-
-                            {/* Bullet 3 */}
-                            <div className="flex items-start gap-2.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-white flex-shrink-0 mt-1.5 shadow-sm"></span>
-                              <span>প্রাপক নম্বর হিসাবে নিচের এই নম্বরটি লিখুন ।</span>
-                            </div>
-
-                            {/* Phone Number Display Box with Copy Button */}
-                            <div className="ml-5 my-2 p-2.5 sm:p-3 rounded-2xl bg-black/35 backdrop-blur-md border border-white/30 flex items-center justify-between gap-2 max-w-sm shadow-inner">
-                              <span className="font-mono font-black text-sm sm:text-base text-yellow-300 tracking-wider select-all">
-                                {activeCfg.number}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => copyNumber(activeCfg.number)}
-                                className="px-3.5 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-black text-xs transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm"
-                              >
-                                <i className="fas fa-copy text-amber-300"></i>
-                                <span>Copy</span>
-                              </button>
-                            </div>
-
-                            {/* Bullet 4 */}
-                            <div className="flex items-start gap-2.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-white flex-shrink-0 mt-1.5 shadow-sm"></span>
-                              <span>
-                                নিশ্চিত করতে আপনার <strong>{methodLabelUpper}</strong> মোবাইল মেনু পিন লিখুন ।
-                              </span>
-                            </div>
-
-                            {/* Bullet 5 */}
-                            <div className="flex items-start gap-2.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-white flex-shrink-0 mt-1.5 shadow-sm"></span>
-                              <span>
-                                এখন উপরের বক্সে আপনার <strong>Transaction ID</strong> দিন আর নিচের <strong>VERIFY</strong> বাটন এ ক্লিক করুন ।
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Extra Note / Rate (If applicable) */}
-                          {activeCfg.note && (
-                            <div className="mt-4 p-2.5 rounded-xl bg-black/30 border border-white/20 text-xs font-bold text-yellow-300 flex items-center gap-2">
-                              <i className="fas fa-info-circle text-sm"></i>
-                              <span>{activeCfg.note}</span>
-                            </div>
-                          )}
-
-                          {/* Big Prominent VERIFY Button */}
+                          {/* Verify Button */}
                           <button
                             type="button"
                             onClick={handleSubmitDeposit}
                             disabled={depositSubmitting}
-                            className="mt-6 w-full py-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-black text-base sm:text-lg tracking-widest uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                            className="w-full py-4 rounded-2xl bg-white hover:bg-emerald-50 text-[#064e3b] font-black text-base sm:text-lg tracking-wider uppercase shadow-2xl transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer border-2 border-white/80"
                           >
                             {depositSubmitting ? (
                               <span className="loading-spinner"></span>
                             ) : (
                               <>
-                                <span>VERIFY</span>
-                                <i className="fas fa-check-circle text-emerald-600 text-base"></i>
+                                <span>পেমেন্ট ভেরিফাই করুন (VERIFY PAYMENT)</span>
+                                <i className="fas fa-check-circle text-emerald-600 text-lg"></i>
                               </>
                             )}
                           </button>
