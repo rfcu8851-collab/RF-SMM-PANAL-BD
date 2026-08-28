@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Live3DCanvas, ThreeDTheme, THEME_CONFIGS } from './components/Live3DCanvas';
 import { Welcome3DModal } from './components/Welcome3DModal';
+import { LiveAISupportModal } from './components/LiveAISupportModal';
+import { AdminLiveSupportPanel } from './components/AdminLiveSupportPanel';
 import {
   db,
   auth,
@@ -78,6 +80,8 @@ interface UserSession {
   name: string;
   email?: string;
   photoURL?: string;
+  referredBy?: string | null;
+  referredByUsername?: string | null;
 }
 
 export interface ReferralCommission {
@@ -323,6 +327,7 @@ export default function App() {
   });
   const [show3DThemeModal, setShow3DThemeModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showAISupportModal, setShowAISupportModal] = useState(false);
 
   // Welcome Speech & 3D Announcement Configuration (stored in Firestore settings/welcome_config)
   const [welcomeConfig, setWelcomeConfig] = useState<{
@@ -338,6 +343,7 @@ export default function App() {
     customAudioUrl?: string;
     audioFileName?: string;
     siteLogo?: string;
+    aiSupportEnabled?: boolean;
   }>({
     title: 'à¦“à¦¯à¦¼à§‡à¦²à¦•à¦¾à¦® RF SMM PANEL!',
     text: 'à¦“à¦¯à¦¼à§‡à¦²à¦•à¦¾à¦® à¦Ÿà§ à¦†à¦° à¦à¦« à¦à¦¸à¦à¦®à¦à¦® à¦ªà§à¦¯à¦¾à¦¨à§‡à¦²à¥¤ à¦¬à¦¾à¦‚à¦²à¦¾à¦¦à§‡à¦¶à§‡à¦° à¦à¦• à¦¨à¦®à§à¦¬à¦° à¦¸à§‹à¦¶à§à¦¯à¦¾à¦² à¦®à¦¿à¦¡à¦¿à¦¯à¦¼à¦¾ à¦®à¦¾à¦°à§à¦•à§‡à¦Ÿà¦¿à¦‚ à¦ªà§à¦²à§à¦¯à¦¾à¦Ÿà¦«à¦°à§à¦®à§‡ à¦†à¦ªà¦¨à¦¾à¦•à§‡ à¦¸à§à¦¬à¦¾à¦—à¦¤à¦®à¥¤',
@@ -350,6 +356,7 @@ export default function App() {
     audioMode: 'tts',
     customAudioUrl: '',
     audioFileName: '',
+    aiSupportEnabled: true,
   });
   const [adminWelcomeTitle, setAdminWelcomeTitle] = useState('à¦“à¦¯à¦¼à§‡à¦²à¦•à¦¾à¦® RF SMM PANEL!');
   const [adminWelcomeText, setAdminWelcomeText] = useState('à¦“à¦¯à¦¼à§‡à¦²à¦•à¦¾à¦® à¦Ÿà§ à¦†à¦° à¦à¦« à¦à¦¸à¦à¦®à¦à¦® à¦ªà§à¦¯à¦¾à¦¨à§‡à¦²à¥¤ à¦¬à¦¾à¦‚à¦²à¦¾à¦¦à§‡à¦¶à§‡à¦° à¦à¦• à¦¨à¦®à§à¦¬à¦° à¦¸à§‹à¦¶à§à¦¯à¦¾à¦² à¦®à¦¿à¦¡à¦¿à¦¯à¦¼à¦¾ à¦®à¦¾à¦°à§à¦•à§‡à¦Ÿà¦¿à¦‚ à¦ªà§à¦²à§à¦¯à¦¾à¦Ÿà¦«à¦°à§à¦®à§‡ à¦†à¦ªà¦¨à¦¾à¦•à§‡ à¦¸à§à¦¬à¦¾à¦—à¦¤à¦®à¥¤');
@@ -471,7 +478,7 @@ export default function App() {
   const [newMethodNote, setNewMethodNote] = useState('');
 
   // Admin Manual Service Form & Control State
-  const [adminSubTab, setAdminSubTab] = useState<'users' | 'payment' | 'deposits' | 'orders' | 'services' | 'notifications' | 'links' | 'welcome' | 'settings' | 'tasks' | 'referrals'>('users');
+  const [adminSubTab, setAdminSubTab] = useState<'users' | 'payment' | 'deposits' | 'orders' | 'services' | 'notifications' | 'links' | 'welcome' | 'settings' | 'tasks' | 'referrals' | 'support'>('users');
   const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<Record<string, PaymentMethodConfig>>({
     bkash: {
       id: 'bkash',
@@ -548,7 +555,7 @@ export default function App() {
   const [newLinkIcon, setNewLinkIcon] = useState('fab fa-telegram');
   const [supportLinks, setSupportLinks] = useState<Array<{ id: string; name: string; url: string; icon: string }>>([
     { id: 'l1', name: 'Telegram Channel', url: 'https://t.me/RF2_SMM', icon: 'fab fa-telegram' },
-    { id: 'l2', name: 'WhatsApp Support', url: 'https://wa.me/8801781119650', icon: 'fab fa-whatsapp' },
+    { id: 'l2', name: 'WhatsApp Support', url: 'https://wa.me/8801342163841', icon: 'fab fa-whatsapp' },
     { id: 'l3', name: 'Facebook Page', url: 'https://www.facebook.com/share/1EKKUHMxCw/', icon: 'fab fa-facebook' }
   ]);
 
@@ -615,7 +622,7 @@ export default function App() {
   const [allReferralCommissions, setAllReferralCommissions] = useState<ReferralCommission[]>([]);
   const [referralConfig, setReferralConfig] = useState<ReferralConfig>({
     enabled: true,
-    bonusPercent: 10,
+    bonusPercent: 5,
     websiteUrl: '',
   });
   const [adminSavingReferralConfig, setAdminSavingReferralConfig] = useState(false);
@@ -837,19 +844,22 @@ export default function App() {
   // 2. Realtime User Info Sync
   useEffect(() => {
     if (!isLoggedIn || !currentUser?.uid) return;
+    const currentUid = currentUser.uid;
+    const currentName = currentUser.name;
+    const currentPhoto = currentUser.photoURL;
 
-    const userRef = doc(db, 'users', currentUser.uid);
+    const userRef = doc(db, 'users', currentUid);
 
     // Initialize user doc if missing
     getDoc(userRef).then(async (snap) => {
       if (!snap.exists()) {
         await setDoc(userRef, {
-          name: currentUser.name || 'User',
+          name: currentName || 'User',
           balance: 0,
           total_orders: 0,
           totalReferrals: 0,
           totalReferralEarnings: 0,
-          photoURL: currentUser.photoURL || '',
+          photoURL: currentPhoto || '',
           createdAt: serverTimestamp()
         });
       }
@@ -858,19 +868,32 @@ export default function App() {
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const d = docSnap.data();
-        setUserBalance(d.balance || 0);
-        setUserTotalOrders(d.total_orders || 0);
-        setUserTotalReferrals(d.totalReferrals || 0);
-        setUserReferralEarnings(d.totalReferralEarnings || 0);
-        if (d.photoURL) setUserPhotoURL(d.photoURL);
+        const bal = typeof d.balance === 'number' ? d.balance : 0;
+        const ord = typeof d.total_orders === 'number' ? d.total_orders : 0;
+        const refs = typeof d.totalReferrals === 'number' ? d.totalReferrals : 0;
+        const earn = typeof d.totalReferralEarnings === 'number' ? d.totalReferralEarnings : 0;
+
+        setUserBalance((prev) => (prev !== bal ? bal : prev));
+        setUserTotalOrders((prev) => (prev !== ord ? ord : prev));
+        setUserTotalReferrals((prev) => (prev !== refs ? refs : prev));
+        setUserReferralEarnings((prev) => (prev !== earn ? earn : prev));
+        if (d.photoURL) {
+          setUserPhotoURL((prev) => (prev !== d.photoURL ? d.photoURL : prev));
+        }
         if (d.name) {
-          setCurrentUser((prev) => (prev ? { ...prev, name: d.name, photoURL: d.photoURL || prev?.photoURL } : prev));
+          setCurrentUser((prev) => {
+            if (!prev) return prev;
+            if (prev.name === d.name && (!d.photoURL || prev.photoURL === d.photoURL)) {
+              return prev;
+            }
+            return { ...prev, name: d.name, photoURL: d.photoURL || prev?.photoURL };
+          });
         }
       }
     });
 
     return () => unsubscribe();
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, currentUser?.uid]);
 
   // 3. Realtime Services Loading (Pure Read - No Auto Save or Auto Seed)
   useEffect(() => {
@@ -886,6 +909,8 @@ export default function App() {
 
       setAllServices(list);
       setCategories(Array.from(catsSet).sort());
+    }, (err) => {
+      console.warn('Services sync notice:', err.message);
     });
 
     return () => unsub();
@@ -905,10 +930,12 @@ export default function App() {
         }
       });
       setOrdersList(list);
+    }, (err) => {
+      console.warn('Orders sync notice:', err.message);
     });
 
     return () => unsub();
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, currentUser?.uid]);
 
   // 5. Realtime User Deposit Requests Sync
   useEffect(() => {
@@ -916,20 +943,31 @@ export default function App() {
 
     const q = query(
       collection(db, 'deposit_requests'),
-      where('uid', '==', currentUser.uid),
-      orderBy('timestamp', 'desc')
+      where('uid', '==', currentUser.uid)
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const list: DepositRequest[] = [];
-      snapshot.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as DepositRequest);
-      });
-      setDepositHistory(list);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: DepositRequest[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as DepositRequest);
+        });
+        // Client-side sort descending by timestamp avoids Firestore composite index requirement
+        list.sort((a, b) => {
+          const timeA = a.timestamp?.seconds ? a.timestamp.seconds * 1000 : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+          const timeB = b.timestamp?.seconds ? b.timestamp.seconds * 1000 : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+          return timeB - timeA;
+        });
+        setDepositHistory(list);
+      },
+      (err) => {
+        console.warn('Deposit history sync notice:', err.message);
+      }
+    );
 
     return () => unsub();
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, currentUser?.uid]);
 
   // 6. Realtime All Deposit Requests Sync (Admin View)
   useEffect(() => {
@@ -940,6 +978,8 @@ export default function App() {
         list.push({ id: docSnap.id, ...docSnap.data() } as DepositRequest);
       });
       setAllDepositRequests(list);
+    }, (err) => {
+      console.warn('All deposit requests sync notice:', err.message);
     });
     return () => unsub();
   }, []);
@@ -965,6 +1005,8 @@ export default function App() {
         list.push({ id: docSnap.id, ...docSnap.data() } as OrderData);
       });
       setAllAdminOrdersList(list);
+    }, (err) => {
+      console.warn('All admin orders sync notice:', err.message);
     });
     return () => unsub();
   }, []);
@@ -1005,7 +1047,7 @@ export default function App() {
         const d = snap.data();
         setReferralConfig({
           enabled: d.enabled !== false,
-          bonusPercent: typeof d.bonusPercent === 'number' ? d.bonusPercent : 10,
+          bonusPercent: typeof d.bonusPercent === 'number' ? d.bonusPercent : 5,
           websiteUrl: d.websiteUrl || '',
         });
       }
@@ -1049,11 +1091,11 @@ export default function App() {
       console.log('User referral commissions sync:', err.message);
     });
     return () => unsub();
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, currentUser?.uid]);
 
   // Sync user total referrals count from allUsersList
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser?.uid) return;
     const myUid = currentUser.uid;
     const myUsername = (currentUser.username || '').toLowerCase();
     const count = allUsersList.filter(
@@ -1061,8 +1103,8 @@ export default function App() {
         (u.referredBy && (u.referredBy === myUid || u.referredBy.toLowerCase() === myUsername)) ||
         (u.referredByUsername && u.referredByUsername.toLowerCase() === myUsername)
     ).length;
-    setUserTotalReferrals(count);
-  }, [allUsersList, currentUser]);
+    setUserTotalReferrals((prev) => (prev !== count ? count : prev));
+  }, [allUsersList, currentUser?.uid, currentUser?.username]);
 
   // 10. Realtime Gateway Countdown Timer
   useEffect(() => {
@@ -1543,39 +1585,130 @@ export default function App() {
     }
   };
 
-  // Helper: Award Referral Deposit Bonus (e.g. 10%) to Referrer upon Deposit Approval
+  // Helper: Award Referral Deposit Bonus (5% Cash Commission) to Referrer upon Deposit Approval
   const processReferralDepositBonus = async (
     depositingUid: string,
     depositAmount: number,
     depTrxOrId: string
   ) => {
     try {
-      if (depositAmount <= 0) return;
-      // Get Depositing User doc
-      const uSnap = await getDoc(doc(db, 'users', depositingUid));
-      let userData: any = uSnap.exists() ? uSnap.data() : {};
-      let referrerUid = userData.referredBy;
-      let referrerUsername = userData.referredByUsername;
+      if (depositAmount <= 0 || !depositingUid) return;
 
-      if (!referrerUid) {
-        const authSnap = await getDoc(doc(db, 'auth_users', depositingUid));
-        if (authSnap.exists()) {
-          const authData = authSnap.data();
-          referrerUid = authData.referredBy;
-          referrerUsername = authData.referredByUsername;
+      // 1. Get Depositing User Data from users, auth_users, and deposit_requests
+      const uSnap = await getDoc(doc(db, 'users', depositingUid));
+      const userData: any = uSnap.exists() ? uSnap.data() : {};
+      
+      const authSnap = await getDoc(doc(db, 'auth_users', depositingUid));
+      const authData: any = authSnap.exists() ? authSnap.data() : {};
+
+      let referrerKey = (userData.referredBy || authData.referredBy || '').trim();
+      let referrerUsername = (userData.referredByUsername || authData.referredByUsername || '').trim();
+
+      // Check deposit request document if needed
+      if (!referrerKey && depTrxOrId) {
+        try {
+          const depDoc = await getDoc(doc(db, 'deposit_requests', depTrxOrId));
+          if (depDoc.exists()) {
+            const dd = depDoc.data();
+            referrerKey = (dd.referredBy || dd.referredByUsername || '').trim();
+            if (!referrerUsername && dd.referredByUsername) referrerUsername = dd.referredByUsername;
+          }
+        } catch (_) {}
+      }
+
+      if (!referrerKey && referrerUsername) {
+        referrerKey = referrerUsername;
+      }
+
+      if (!referrerKey) {
+        console.log('No referrer configured for user:', depositingUid);
+        return;
+      }
+
+      const cleanKey = referrerKey.replace(/^@+/, '').trim().toLowerCase();
+      if (!cleanKey || cleanKey === depositingUid.toLowerCase()) return;
+
+      // 2. Resolve Referrer UID and Info across users and auth_users
+      let resolvedReferrerUid: string | null = null;
+      let resolvedReferrerUsername = referrerUsername || cleanKey;
+      let resolvedReferrerName = 'Friend';
+
+      // Check direct UID lookup
+      const directUserSnap = await getDoc(doc(db, 'users', cleanKey));
+      if (directUserSnap.exists()) {
+        resolvedReferrerUid = cleanKey;
+        const d = directUserSnap.data();
+        resolvedReferrerUsername = d.username || resolvedReferrerUsername;
+        resolvedReferrerName = d.name || resolvedReferrerUsername;
+      } else {
+        const directAuthSnap = await getDoc(doc(db, 'auth_users', cleanKey));
+        if (directAuthSnap.exists()) {
+          resolvedReferrerUid = cleanKey;
+          const d = directAuthSnap.data();
+          resolvedReferrerUsername = d.username || resolvedReferrerUsername;
+          resolvedReferrerName = d.name || resolvedReferrerUsername;
         }
       }
 
-      if (!referrerUid || referrerUid === depositingUid) return;
+      // If not resolved by UID, query by username in auth_users
+      if (!resolvedReferrerUid) {
+        const qAuth = query(collection(db, 'auth_users'), where('username', '==', cleanKey));
+        const snapAuth = await getDocs(qAuth);
+        if (!snapAuth.empty) {
+          resolvedReferrerUid = snapAuth.docs[0].id;
+          const d = snapAuth.docs[0].data();
+          resolvedReferrerUsername = d.username || cleanKey;
+          resolvedReferrerName = d.name || resolvedReferrerUsername;
+        }
+      }
 
-      // Fetch fresh referral config or use local
-      let bonusPercent = referralConfig.enabled !== false ? (referralConfig.bonusPercent ?? 10) : 10;
+      // If still not resolved, query by username in users
+      if (!resolvedReferrerUid) {
+        const qUser = query(collection(db, 'users'), where('username', '==', cleanKey));
+        const snapUser = await getDocs(qUser);
+        if (!snapUser.empty) {
+          resolvedReferrerUid = snapUser.docs[0].id;
+          const d = snapUser.docs[0].data();
+          resolvedReferrerUsername = d.username || cleanKey;
+          resolvedReferrerName = d.name || resolvedReferrerUsername;
+        }
+      }
+
+      // Fallback: search in local allUsersList state
+      if (!resolvedReferrerUid && allUsersList && allUsersList.length > 0) {
+        const matched = allUsersList.find(
+          (u: any) =>
+            u.uid === cleanKey ||
+            (u.username && u.username.toLowerCase() === cleanKey)
+        );
+        if (matched) {
+          resolvedReferrerUid = matched.uid;
+          resolvedReferrerUsername = matched.username || cleanKey;
+          resolvedReferrerName = matched.name || resolvedReferrerUsername;
+        }
+      }
+
+      // Final fallback to cleanKey
+      if (!resolvedReferrerUid) {
+        resolvedReferrerUid = cleanKey;
+      }
+
+      if (!resolvedReferrerUid || resolvedReferrerUid === depositingUid) return;
+
+      // 3. Determine 5% Bonus Commission
+      let bonusPercent = 5;
+      if (referralConfig && typeof referralConfig.bonusPercent === 'number' && referralConfig.bonusPercent > 0) {
+        bonusPercent = referralConfig.bonusPercent;
+      }
+
       try {
         const cfgSnap = await getDoc(doc(db, 'settings', 'referral_config'));
         if (cfgSnap.exists()) {
           const d = cfgSnap.data();
           if (d.enabled === false) return;
-          if (typeof d.bonusPercent === 'number') bonusPercent = d.bonusPercent;
+          if (typeof d.bonusPercent === 'number' && d.bonusPercent > 0) {
+            bonusPercent = d.bonusPercent;
+          }
         }
       } catch (e) {}
 
@@ -1584,67 +1717,70 @@ export default function App() {
       const commission = Math.round((depositAmount * (bonusPercent / 100)) * 100) / 100;
       if (commission <= 0) return;
 
-      // Resolve referrer user doc (whether referrerUid is UID or Username)
-      let resolvedReferrerUid = referrerUid;
-      let refUserRef = doc(db, 'users', resolvedReferrerUid);
-      let refSnap = await getDoc(refUserRef);
+      // 4. Safely credit Referrer Balance & Update Stats
+      const targetUserDocRef = doc(db, 'users', resolvedReferrerUid);
+      const targetSnap = await getDoc(targetUserDocRef);
+      const prevBal = targetSnap.exists() ? (Number(targetSnap.data().balance) || 0) : 0;
+      const prevEarnings = targetSnap.exists() ? (Number(targetSnap.data().totalReferralEarnings) || 0) : 0;
+      const prevRefs = targetSnap.exists() ? (Number(targetSnap.data().totalReferrals) || 1) : 1;
 
-      if (!refSnap.exists()) {
-        const qRefAuth = query(collection(db, 'auth_users'), where('username', '==', referrerUid.toLowerCase()));
-        const snapRefAuth = await getDocs(qRefAuth);
-        if (!snapRefAuth.empty) {
-          resolvedReferrerUid = snapRefAuth.docs[0].id;
-          referrerUsername = snapRefAuth.docs[0].data().username || referrerUsername;
-          refUserRef = doc(db, 'users', resolvedReferrerUid);
-          refSnap = await getDoc(refUserRef);
-        }
+      const newBal = Math.round((prevBal + commission) * 100) / 100;
+      const newEarn = Math.round((prevEarnings + commission) * 100) / 100;
+
+      await setDoc(
+        targetUserDocRef,
+        {
+          balance: newBal,
+          totalReferralEarnings: newEarn,
+          totalReferrals: prevRefs,
+          name: targetSnap.exists() ? (targetSnap.data().name || resolvedReferrerName) : resolvedReferrerName,
+          username: resolvedReferrerUsername,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      // Instant state sync if active user is the referrer
+      if (
+        currentUser?.uid === resolvedReferrerUid ||
+        (currentUser?.username || '').toLowerCase() === cleanKey
+      ) {
+        setUserBalance((prev) => (prev !== newBal ? newBal : prev));
+        setUserReferralEarnings((prev) => (prev !== newEarn ? newEarn : prev));
+        showToast(`ğŸ‰ à§³${commission.toFixed(2)} (${bonusPercent}%) à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦•à§à¦¯à¦¾à¦¶ à¦•à¦®à¦¿à¦¶à¦¨ à¦†à¦ªà¦¨à¦¾à¦° à¦¬à§à¦¯à¦¾à¦²à§‡à¦¨à§à¦¸à§‡ à¦¯à§‹à¦— à¦¹à§Ÿà§‡à¦›à§‡!`, 'success');
       }
 
-      if (refSnap.exists()) {
-        const refData = refSnap.data();
-        const currentBal = refData.balance || 0;
-        const currentEarnings = refData.totalReferralEarnings || 0;
+      // 5. Record in referral_commissions collection
+      await addDoc(collection(db, 'referral_commissions'), {
+        referrerUid: resolvedReferrerUid,
+        referrerUsername: resolvedReferrerUsername,
+        referredUid: depositingUid,
+        referredUsername: userData.username || authData.username || userData.name || 'Friend',
+        depositAmount: Number(depositAmount),
+        bonusPercent: Number(bonusPercent),
+        commissionAmount: commission,
+        depositTrxId: depTrxOrId || '',
+        status: 'Completed',
+        timestamp: serverTimestamp(),
+        createdAt: new Date().toISOString()
+      });
 
-        await updateDoc(refUserRef, {
-          balance: currentBal + commission,
-          totalReferralEarnings: currentEarnings + commission,
-        });
+      // 6. Push notification for Referrer
+      await addDoc(collection(db, 'user_notifications'), {
+        uid: resolvedReferrerUid,
+        title: `ğŸ à§³${commission.toFixed(2)} (${bonusPercent}%) à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦•à¦®à¦¿à¦¶à¦¨ à¦œà¦®à¦¾ à¦¹à§Ÿà§‡à¦›à§‡!`,
+        message: `à¦†à¦ªà¦¨à¦¾à¦° à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦‡à¦‰à¦œà¦¾à¦° (@${userData.username || authData.username || userData.name || 'User'}) à§³${depositAmount} à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦¸à¦®à§à¦ªà¦¨à§à¦¨ à¦•à¦°à¦¾à§Ÿ à¦†à¦ªà¦¨à¦¿ ${bonusPercent}% à¦•à§à¦¯à¦¾à¦¶ à¦•à¦®à¦¿à¦¶à¦¨ à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à§³${commission.toFixed(2)} à¦®à§‚à¦² à¦¬à§à¦¯à¦¾à¦²à§‡à¦¨à§à¦¸à§‡ à¦ªà§‡à§Ÿà§‡ à¦—à§‡à¦›à§‡à¦¨!`,
+        type: 'promo',
+        timestamp: serverTimestamp(),
+        unread: true
+      });
 
-        // Record Commission Log in Firestore
-        await addDoc(collection(db, 'referral_commissions'), {
-          referrerUid: resolvedReferrerUid,
-          referrerUsername: referrerUsername || '',
-          referredUid: depositingUid,
-          referredUsername: userData.username || userData.name || 'User',
-          depositAmount,
-          bonusPercent,
-          commissionAmount: commission,
-          depositTrxId: depTrxOrId || '',
-          timestamp: serverTimestamp(),
-          createdAt: new Date().toISOString(),
-          status: 'Completed'
-        });
-
-        // Add Notification for Referrer
-        await addDoc(collection(db, 'user_notifications'), {
-          uid: resolvedReferrerUid,
-          title: `ğŸ à§³${commission.toFixed(2)} (${bonusPercent}%) à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦¬à§‹à¦¨à¦¾à¦¸!`,
-          message: `à¦†à¦ªà¦¨à¦¾à¦° à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦‡à¦‰à¦œà¦¾à¦° (${userData.username || userData.name || 'à¦¬à¦¨à§à¦§à§'}) à§³${depositAmount} à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦•à¦°à¦¾à§Ÿ à¦†à¦ªà¦¨à¦¿ ${bonusPercent}% à¦¬à§‹à¦¨à¦¾à¦¸ à¦¹à¦¿à¦¸à§‡à¦¬à§‡ à§³${commission.toFixed(2)} à¦•à§à¦¯à¦¾à¦¶ à¦ªà§‡à§Ÿà§‡à¦›à§‡à¦¨!`,
-          type: 'promo',
-          timestamp: serverTimestamp(),
-          unread: true
-        });
-
-        if (currentUser?.uid === resolvedReferrerUid) {
-          showToast(`ğŸ‰ You received à§³${commission.toFixed(2)} (${bonusPercent}%) referral bonus!`, 'success');
-        }
-      }
+      console.log(`Successfully credited referral bonus: à§³${commission} to ${resolvedReferrerUsername} (${resolvedReferrerUid})`);
     } catch (err) {
       console.error('Error awarding referral bonus:', err);
     }
   };
 
-  // Admin Deposit Approval (with customizable amount adjustment before approval and 5% Referral Bonus)
   const handleApproveDepositCustom = async (depId: string, uid: string, originalAmount: number) => {
     const customStr = customDepAmounts[depId];
     const finalAmount = customStr !== undefined && !isNaN(parseFloat(customStr)) && parseFloat(customStr) >= 0
@@ -1735,6 +1871,7 @@ export default function App() {
             customAudioUrl: data.customAudioUrl || '',
             audioFileName: data.audioFileName || '',
             siteLogo: data.siteLogo || '',
+            aiSupportEnabled: data.aiSupportEnabled !== undefined ? data.aiSupportEnabled : true,
           };
           setWelcomeConfig(cfg);
           setAdminWelcomeTitle(cfg.title);
@@ -2962,6 +3099,28 @@ export default function App() {
         showToast(`âš ï¸ Order saved locally. API error: ${apiErr}`, 'warning');
       }
 
+            // 4. Background Telegram Live Notification to 2 channels (@RF2_SMM & @FARJU_SMM_PANAL)
+      try {
+        fetch('/api/telegram/order-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderRef.id,
+            apiOrderId: apiResponse?.order || null,
+            serviceName: sname,
+            category: selectedCategory || currentService?.category || 'SMM Service',
+            quantity: qty,
+            cost: cost,
+            link: link,
+            userName: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'RF SMM Client'),
+            userEmail: currentUser.email || '',
+            status: apiResponse?.order ? 'Processing âš¡' : 'Pending â³',
+            createdAt: new Date().toISOString(),
+            siteLogo: adminSiteLogo || welcomeConfig.siteLogo || '',
+          })
+        }).catch((tgErr) => console.warn('Silent TG notification:', tgErr));
+      } catch (_) {}
+
       // Reset form fields
       setTargetLink('');
       setQuantity(100);
@@ -3055,6 +3214,10 @@ export default function App() {
     try {
       await addDoc(collection(db, 'deposit_requests'), {
         uid: currentUser.uid,
+        username: currentUser.username || '',
+        name: currentUser.name || '',
+        referredBy: currentUser.referredBy || null,
+        referredByUsername: currentUser.referredByUsername || null,
         amount: amt,
         trxId: trx,
         method: activeConfig.label || selectedMethod,
@@ -3964,6 +4127,38 @@ export default function App() {
           {/* HOME TAB */}
           {activeTab === 'home' && (
             <section className="px-5 mt-5">
+              {/* 24/7 Live AI Support Banner */}
+              {welcomeConfig.aiSupportEnabled !== false && (
+                <div
+                  onClick={() => {
+                    setShowAISupportModal(true);
+                    haptic('heavy');
+                  }}
+                  className="mb-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/25 via-yellow-500/15 to-blue-950/40 border border-amber-500/40 hover:border-amber-400 transition-all duration-200 cursor-pointer shadow-[0_4px_20px_rgba(245,158,11,0.15)] flex items-center justify-between active:scale-[0.99] group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 text-black flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/30 group-hover:scale-105 transition">
+                      <i className="fas fa-robot"></i>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-xs text-white">à§¨à§ª/à§­ à¦²à¦¾à¦‡à¦­ AI à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ à¦¸à¦¹à¦•à¦¾à¦°à§€</h4>
+                        <span className="bg-emerald-500 text-black font-black text-[9px] px-1.5 py-0.2 rounded font-mono">
+                          ONLINE âš¡
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-amber-200/90 mt-0.5">
+                        à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ, à¦…à¦°à§à¦¡à¦¾à¦° à¦¬à¦¾ à¦ªà§à¦¯à¦¾à¦¨à§‡à¦² à¦¬à¦¿à¦·à§Ÿà¦• à¦¯à§‡à¦•à§‹à¦¨à§‹ à¦ªà§à¦°à¦¶à§à¦¨ à¦•à¦°à§à¦¨ â€¢ à¦‡à¦¨à¦¸à§à¦Ÿà§à¦¯à¦¾à¦¨à§à¦Ÿ à¦¸à¦®à¦¾à¦§à¦¾à¦¨ à¦ªà¦¾à¦¨
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-amber-400 text-xs font-black bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/30 group-hover:bg-amber-500 group-hover:text-black transition">
+                    <span>à¦šà§à¦¯à¦¾à¦Ÿ à¦¶à§à¦°à§</span>
+                    <i className="fas fa-arrow-right text-[9px]"></i>
+                  </div>
+                </div>
+              )}
+
               {/* SEARCH BAR TRIGGER */}
               <div className="mb-3">
                 <div
@@ -6690,6 +6885,35 @@ export default function App() {
                   <span>Help & Support Center (à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ à¦“ à¦¸à§‹à¦¶à§à¦¯à¦¾à¦² à¦²à¦¿à¦™à§à¦•)</span>
                 </h4>
 
+                {/* Live AI Support Card in Profile */}
+                {welcomeConfig.aiSupportEnabled !== false && (
+                  <div
+                    onClick={() => {
+                      setShowAISupportModal(true);
+                      haptic('heavy');
+                    }}
+                    className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-600/10 to-blue-900/30 border border-amber-500/40 hover:border-amber-400 flex items-center justify-between cursor-pointer transition active:scale-95 shadow-[0_4px_15px_rgba(245,158,11,0.1)]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/30 text-amber-300 flex items-center justify-center text-lg border border-amber-500/40">
+                        <i className="fas fa-robot"></i>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h5 className="font-extrabold text-xs text-white">à§¨à§ª/à§­ à¦²à¦¾à¦‡à¦­ AI à¦¸à¦¾à¦ªà§‹à¦°à§à¦Ÿ</h5>
+                          <span className="bg-emerald-500 text-black text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">
+                            INSTANT
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-300 mt-0.5">à¦¯à§‡à¦•à§‹à¦¨à§‹ à¦ªà§à¦°à¦¶à§à¦¨ à¦•à¦°à§à¦¨, à¦­à§Ÿà§‡à¦¸à§‡ à¦¶à§à¦¨à§à¦¨ à¦¬à¦¾ à¦Ÿà¦¾à¦‡à¦ª à¦•à¦°à§à¦¨</p>
+                      </div>
+                    </div>
+                    <button className="px-3 py-1.5 rounded-xl bg-amber-500 text-black font-extrabold text-xs shadow hover:bg-amber-400 transition">
+                      à¦šà§à¦¯à¦¾à¦Ÿ à¦•à¦°à§à¦¨
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <a
                     href="https://t.me/RF2_SMM"
@@ -6707,7 +6931,7 @@ export default function App() {
                   </a>
 
                   <a
-                    href="https://wa.me/8801781119650"
+                    href="https://wa.me/8801342163841"
                     target="_blank"
                     rel="noreferrer"
                     className="p-3.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-3 transition active:scale-95"
@@ -6832,6 +7056,7 @@ export default function App() {
                   { id: 'notifications', label: 'Broadcast', icon: 'fas fa-bullhorn' },
                   { id: 'links', label: 'Support Links', icon: 'fas fa-link' },
                   { id: 'settings', label: 'Site Logo & Settings (à¦²à§‹à¦—à§‹ à¦“ à¦¸à§‡à¦Ÿà¦¿à¦‚à¦¸)', icon: 'fas fa-cog' },
+                  { id: 'support', label: 'Live AI & Chat Support (à¦²à¦¾à¦‡à¦­ à¦‡à¦¨à¦¬à¦•à§à¦¸)', icon: 'fas fa-headset' },
                   { id: 'tasks', label: 'Tasks & Screenshots Proof (à¦Ÿà¦¾à¦¸à§à¦• à¦ªà§à¦°à§à¦«)', icon: 'fas fa-tasks' }
                 ].map((st) => (
                   <button
@@ -8993,6 +9218,107 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* TELEGRAM LIVE ORDER NOTIFICATION STATUS & TEST */}
+                  <div className="glass-card p-5 space-y-4 border border-sky-500/40 bg-gradient-to-br from-sky-950/30 via-slate-900/90 to-slate-900/90 shadow-[0_4px_25px_rgba(14,165,233,0.15)] rounded-2xl">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-500 flex items-center justify-center text-white text-lg font-black shadow-lg">
+                          <i className="fab fa-telegram-plane"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-black text-sm text-white flex items-center gap-2">
+                            <span>à¦Ÿà§‡à¦²à¦¿à¦—à§à¦°à¦¾à¦® à¦²à¦¾à¦‡à¦­ à¦…à¦°à§à¦¡à¦¾à¦° à¦¨à§‹à¦Ÿà¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ (à§¨à¦Ÿà¦¿ à¦šà§à¦¯à¦¾à¦¨à§‡à¦²)</span>
+                            <span className="text-[9px] bg-emerald-500/25 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-mono font-bold">
+                              LIVE ACTIVE
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-slate-300">
+                            à¦¯à§‡à¦•à§‹à¦¨à§‹ à¦‡à¦‰à¦œà¦¾à¦° à¦…à¦°à§à¦¡à¦¾à¦° à¦•à¦°à¦¾à¦° à¦¸à¦¾à¦¥à§‡ à¦¸à¦¾à¦¥à§‡ à¦²à§‹à¦—à§‹, à¦…à¦°à§à¦¡à¦¾à¦° à¦†à¦‡à¦¡à¦¿, à¦¸à¦¾à¦°à§à¦­à¦¿à¦¸ à¦“ à¦•à¦¾à¦¸à§à¦Ÿà¦®à¦¾à¦° à¦¡à¦¿à¦Ÿà§‡à¦‡à¦²à¦¸ à¦¸à¦¹ à¦¸à¦°à¦¾à¦¸à¦°à¦¿ à§¨ à¦Ÿà¦¿ à¦šà§à¦¯à¦¾à¦¨à§‡à¦²à§‡ à¦¸à§à¦Ÿà¦¾à¦‡à¦²à¦¿à¦¶ à¦ªà§‹à¦¸à§à¦Ÿ à¦¯à¦¾à¦¬à§‡à¥¤
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-slate-800/80 border border-white/10 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-400">à¦šà§à¦¯à¦¾à¦¨à§‡à¦² à§§ (Official Admin):</span>
+                          <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded">à¦¸à¦‚à¦¯à§à¦•à§à¦¤</span>
+                        </div>
+                        <a
+                          href="https://t.me/RF2_SMM"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-sky-400 hover:underline flex items-center gap-1.5"
+                        >
+                          <i className="fab fa-telegram"></i>
+                          <span>@RF2_SMM</span>
+                        </a>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-800/80 border border-white/10 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-400">à¦šà§à¦¯à¦¾à¦¨à§‡à¦² à§¨ (Farju SMM Channel):</span>
+                          <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded">à¦¸à¦‚à¦¯à§à¦•à§à¦¤</span>
+                        </div>
+                        <a
+                          href="https://t.me/FARJU_SMM_PANAL"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-sky-400 hover:underline flex items-center gap-1.5"
+                        >
+                          <i className="fab fa-telegram"></i>
+                          <span>@FARJU_SMM_PANAL</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11px] text-slate-300">
+                        <span className="text-slate-400">à¦¬à¦Ÿ à¦†à¦‡à¦¡à¦¿:</span> <code className="text-sky-300 font-mono">@Turbo_DownloaderBot</code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          showToast('à¦Ÿà§‡à¦²à¦¿à¦—à§à¦°à¦¾à¦®à§‡ à¦Ÿà§‡à¦¸à§à¦Ÿ à¦ªà§‹à¦¸à§à¦Ÿ à¦ªà¦¾à¦ à¦¾à¦¨à§‹ à¦¹à¦šà§à¦›à§‡...', 'info');
+                          try {
+                            const resp = await fetch('/api/telegram/order-notify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                orderId: 'TEST-' + Math.floor(100000 + Math.random() * 900000),
+                                apiOrderId: '98412',
+                                serviceName: 'Facebook Page Followers | High Speed',
+                                category: 'Facebook Services',
+                                quantity: 1000,
+                                cost: 55.0,
+                                link: 'https://facebook.com/rf.smm.official',
+                                userName: currentUser?.displayName || 'Farju Admin',
+                                userEmail: currentUser?.email || 'farju@gmail.com',
+                                status: 'Processing âš¡',
+                                createdAt: new Date().toISOString(),
+                                siteLogo: adminSiteLogo || welcomeConfig.siteLogo || '',
+                              })
+                            });
+                            const dt = await resp.json();
+                            if (dt.success) {
+                              haptic('success');
+                              showToast('âœ… @RF2_SMM à¦“ @FARJU_SMM_PANAL à¦šà§à¦¯à¦¾à¦¨à§‡à¦²à§‡ à¦²à¦¾à¦‡à¦­ à¦¨à§‹à¦Ÿà¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ à¦¸à¦«à¦² à¦¹à§Ÿà§‡à¦›à§‡!', 'success');
+                            } else {
+                              showToast('à¦¤à§à¦°à§à¦Ÿà¦¿: ' + (dt.error || 'Failed'), 'error');
+                            }
+                          } catch (e: any) {
+                            showToast('Error: ' + e.message, 'error');
+                          }
+                        }}
+                        className="btn-primary-gradient py-2 px-3 text-xs font-bold flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white"
+                      >
+                        <i className="fas fa-paper-plane"></i>
+                        <span>à¦Ÿà§‡à¦¸à§à¦Ÿ à¦¨à§‹à¦Ÿà¦¿à¦«à¦¿à¦•à§‡à¦¶à¦¨ à¦ªà¦¾à¦ à¦¾à¦¨ (Send Test)</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="glass-card p-5 space-y-4">
                     <h3 className="font-extrabold text-xs text-white flex items-center gap-2">
                       <i className="fas fa-sliders-h text-blue-400"></i>
@@ -9364,329 +9690,29 @@ export default function App() {
                         <i className="fas fa-gift"></i>
                       </div>
                       <div>
-                        <h3 className="font-black text-sm text-white flex items-center gap-2">
-                          <span>Referral Bonus System (à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦“ à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦¬à§‹à¦¨à¦¾à¦¸ à¦•à¦¨à§à¦Ÿà§à¦°à§‹à¦²)</span>
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-500/30">
-                            {referralConfig.enabled ? 'ACTIVE âš¡' : 'DISABLED'}
-                          </span>
-                        </h3>
-                        <p className="text-[10px] text-amber-200/80">
-                          à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦²à¦¿à¦‚à¦• à¦¦à¦¿à§Ÿà§‡ à¦¯à§à¦•à§à¦¤ à¦‡à¦‰à¦œà¦¾à¦° à¦¯à§‡à¦•à§‹à¦¨à§‹ à¦ªà¦°à¦¿à¦®à¦¾à¦£ à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦•à¦°à¦²à§‡ à¦‡à¦¨à¦­à¦¾à¦‡à¦Ÿà¦¾à¦° à¦¸à§à¦¬à§Ÿà¦‚à¦•à§à¦°à¦¿à§Ÿà¦­à¦¾à¦¬à§‡ {referralConfig.bonusPercent || 10}% à¦•à¦®à¦¿à¦¶à¦¨ à¦ªà¦¾à¦¬à§‡
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 font-mono text-xs font-bold text-amber-300 bg-black/50 px-3 py-1.5 rounded-xl border border-amber-500/30">
-                      <span>Total Commissions Paid:</span>
-                      <span className="text-emerald-400 font-black">
-                        à§³{allReferralCommissions.reduce((acc, c) => acc + (c.commissionAmount || 0), 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Settings Control Cards */}
-                  <div className="glass-card p-4 space-y-4 border border-amber-500/20">
-                    <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-2">
-                      <i className="fas fa-sliders text-amber-400"></i>
-                      <span>Referral System Configuration (à¦•à¦¨à¦«à¦¿à¦—à¦¾à¦°à§‡à¦¶à¦¨)</span>
-                    </h4>
-
-                    {/* 1. Referral Website Link Control */}
-                    <div className="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="text-xs font-black text-white flex items-center gap-1.5">
-                          <i className="fas fa-globe text-cyan-400"></i>
-                          <span>Referral Website Base URL (à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦“à§Ÿà§‡à¦¬à¦¸à¦¾à¦‡à¦Ÿà§‡à¦° à¦®à§‚à¦² à¦²à¦¿à¦‚à¦•)</span>
-                        </label>
-                        <span className="text-[10px] text-amber-300 font-mono">
-                          {referralConfig.websiteUrl || window.location.origin}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">
-                        à¦à¦¡à¦®à¦¿à¦¨ à¦ªà§à¦¯à¦¾à¦¨à§‡à¦² à¦¥à§‡à¦•à§‡ à¦†à¦ªà¦¨à¦¾à¦° à¦•à¦¾à¦¸à§à¦Ÿà¦® à¦¡à§‹à¦®à§‡à¦‡à¦¨ à¦¬à¦¾ à¦“à§Ÿà§‡à¦¬à¦¸à¦¾à¦‡à¦Ÿà§‡à¦° à¦²à¦¿à¦‚à¦• à¦¦à¦¿à¦¨ (à¦¯à§‡à¦®à¦¨: https://yourdomain.com)à¥¤ à¦‡à¦‰à¦œà¦¾à¦°à§‡à¦° à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦²à¦¿à¦‚à¦• à¦à¦‡ à¦²à¦¿à¦‚à¦•à§‡à¦° à¦¸à¦¾à¦¥à§‡ <code className="text-amber-300">?ref=username</code> à¦†à¦•à¦¾à¦°à§‡ à¦¤à§ˆà¦°à¦¿ à¦¹à¦¬à§‡à¥¤
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="url"
-                          className="input-modern text-xs font-mono text-cyan-300 flex-1"
-                          placeholder={window.location.origin}
-                          value={referralConfig.websiteUrl || ''}
-                          onChange={(e) => {
-                            setReferralConfig((prev) => ({ ...prev, websiteUrl: e.target.value }));
-                          }}
-                        />
-                        <button
-                          onClick={() => {
-                            setReferralConfig((prev) => ({ ...prev, websiteUrl: window.location.origin }));
-                            showToast('Current site origin inserted!', 'info');
-                          }}
-                          type="button"
-                          className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-white/10 transition whitespace-nowrap"
-                        >
-                          <i className="fas fa-crosshairs mr-1 text-cyan-400"></i> Use Current URL
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              setAdminSavingReferralConfig(true);
-                              const cleanUrl = (referralConfig.websiteUrl || '').trim();
-                              await setDoc(doc(db, 'settings', 'referral_config'), {
-                                ...referralConfig,
-                                websiteUrl: cleanUrl
-                              }, { merge: true });
-                              showToast('âœ… Referral Website URL saved successfully!', 'success');
-                              haptic('success');
-                            } catch (e: any) {
-                              showToast('Error saving URL: ' + e.message, 'error');
-                            } finally {
-                              setAdminSavingReferralConfig(false);
-                            }
-                          }}
-                          disabled={adminSavingReferralConfig}
-                          type="button"
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl shadow transition whitespace-nowrap"
-                        >
-                          {adminSavingReferralConfig ? <span className="loading-spinner"></span> : <span><i className="fas fa-save mr-1"></i> Save URL</span>}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* 2. System Active Status */}
-                      <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
-                        <label className="text-xs font-extrabold text-white flex items-center justify-between">
-                          <span>System Active Status</span>
-                          <span className={referralConfig.enabled ? 'text-emerald-400 font-black' : 'text-red-400 font-black'}>
-                            {referralConfig.enabled ? 'Enabled âš¡' : 'Disabled â›”'}
-                          </span>
-                        </label>
-                        <p className="text-[10px] text-slate-400">Enable or pause automatic referral commission payout on deposit approval.</p>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const newStatus = !referralConfig.enabled;
-                              await setDoc(doc(db, 'settings', 'referral_config'), {
-                                ...referralConfig,
-                                enabled: newStatus
-                              }, { merge: true });
-                              setReferralConfig(prev => ({ ...prev, enabled: newStatus }));
-                              showToast(`Referral system ${newStatus ? 'enabled' : 'disabled'}!`, 'success');
-                              haptic('success');
-                            } catch (e: any) {
-                              showToast('Error updating status: ' + e.message, 'error');
-                            }
-                          }}
-                          className={`w-full py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 ${
-                            referralConfig.enabled
-                              ? 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
-                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                          }`}
-                        >
-                          <i className={`fas ${referralConfig.enabled ? 'fa-pause' : 'fa-play'}`}></i>
-                          <span>{referralConfig.enabled ? 'Pause Referral System' : 'Activate Referral System'}</span>
-                        </button>
-                      </div>
-
-                      {/* 3. Commission Percentage */}
-                      <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
-                        <label className="text-xs font-extrabold text-white flex items-center justify-between">
-                          <span>Commission Percentage (% à¦¬à§‹à¦¨à¦¾à¦¸ à¦¹à¦¾à¦°)</span>
-                          <span className="text-amber-400 font-mono font-bold text-sm">{referralConfig.bonusPercent}%</span>
-                        </label>
-                        <p className="text-[10px] text-slate-400">à¦¯à§‡à¦•à§‹à¦¨à§‹ à¦¡à¦¿à¦ªà§‹à¦œà¦¿à¦Ÿ à¦…à¦¨à§à¦®à§‹à¦¦à¦¨à§‡à¦° à¦ªà¦° à¦‡à¦¨à¦­à¦¾à¦‡à¦Ÿà¦¾à¦° à¦à¦‡ à¦¹à¦¾à¦°à§‡ à¦•à¦®à¦¿à¦¶à¦¨ à¦ªà¦¾à¦¬à§‡à¥¤</p>
-                        
-                        {/* Preset Quick Chips */}
-                        <div className="flex gap-1.5 mb-1">
-                          {[5, 10, 15, 20].map((pct) => (
-                            <button
-                              key={pct}
-                              type="button"
-                              onClick={() => setReferralConfig((prev) => ({ ...prev, bonusPercent: pct }))}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition border ${
-                                referralConfig.bonusPercent === pct
-                                  ? 'bg-amber-500 text-black border-amber-400 shadow'
-                                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                              }`}
-                            >
-                              {pct}%
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            className="input-modern text-xs font-mono font-bold text-amber-300 py-1.5"
-                            value={referralConfig.bonusPercent}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setReferralConfig(prev => ({ ...prev, bonusPercent: val }));
-                            }}
-                          />
-                          <button
-                            onClick={async () => {
-                              try {
-                                await setDoc(doc(db, 'settings', 'referral_config'), {
-                                  ...referralConfig,
-                                  bonusPercent: referralConfig.bonusPercent || 10
-                                }, { merge: true });
-                                showToast(`âœ… Referral bonus set to ${referralConfig.bonusPercent}%!`, 'success');
-                                haptic('success');
-                              } catch (e: any) {
-                                showToast('Error: ' + e.message, 'error');
-                              }
-                            }}
-                            className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl shadow transition whitespace-nowrap"
-                          >
-                            Save %
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section: Referral Commission History Log */}
-                  <div className="glass-card p-4 space-y-3 border border-white/5">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <i className="fas fa-history text-amber-400"></i>
-                        <span>Referral Payout History (à¦°à§‡à¦«à¦¾à¦°à§‡à¦² à¦•à¦®à¦¿à¦¶à¦¨ à¦¹à¦¿à¦¸à§à¦Ÿà§‹à¦°à¦¿)</span>
-                      </h4>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {allReferralCommissions.length} records
-                      </span>
-                    </div>
-
-                    {allReferralCommissions.length === 0 ? (
-                      <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 text-center text-xs text-slate-400">
-                        No referral commissions logged yet.
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                        {allReferralCommissions.map((comm) => (
-                          <div
-                            key={comm.id}
-                            className="p-3 rounded-xl bg-slate-900/80 border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs"
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white">@{comm.referrerUsername}</span>
-                                <span className="text-[10px] text-slate-400">earned from</span>
-                                <span className="font-bold text-amber-300">@{comm.referredUsername}</span>
-                              </div>
-                              <div className="text-[10px] text-slate-400">
-                                Deposit: à§³{comm.depositAmount} ({comm.bonusPercent}%) â€¢{' '}
-                                {comm.timestamp?.toDate
-                                  ? comm.timestamp.toDate().toLocaleString()
-                                  : 'Recently'}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-sm font-mono font-black text-emerald-400">
-                                +à§³{comm.commissionAmount.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* Bottom Floating Navigation Bar */}
-          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#070d1d]/90 backdrop-blur-xl border-t border-white/10 px-4 py-2 flex items-center justify-around max-w-lg mx-auto sm:rounded-t-2xl shadow-2xl">
-            <button
-              onClick={() => {
-                setActiveTab('home');
-                haptic('light');
-              }}
-              className={`flex flex-col items-center gap-1 transition ${
-                activeTab === 'home' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <i className="fas fa-home text-base"></i>
-              <span className="text-[10px] font-bold">Home</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('orders');
-                haptic('light');
-              }}
-              className={`flex flex-col items-center gap-1 transition ${
-                activeTab === 'orders' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <i className="fas fa-shopping-bag text-base"></i>
-              <span className="text-[10px] font-bold">Orders</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('funds');
-                haptic('heavy');
-              }}
-              className={`flex flex-col items-center gap-1 transition ${
-                activeTab === 'funds' ? 'text-cyan-400 scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <div className="w-9 h-9 -mt-4 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-black flex items-center justify-center shadow-lg shadow-amber-500/30 border-2 border-[#070d1d]">
-                <i className="fas fa-wallet text-sm"></i>
-              </div>
-              <span className="text-[10px] font-bold text-amber-300">Deposit</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('profile');
-                haptic('light');
-              }}
-              className={`flex flex-col items-center gap-1 transition ${
-                activeTab === 'profile' ? 'text-amber-400 scale-105' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <i className="fas fa-user text-base"></i>
-              <span className="text-[10px] font-bold">Profile</span>
-            </button>
-
-            {isAdminUser && (
-              <button
-                onClick={() => {
-                  setActiveTab(activeTab === 'admin' ? 'home' : 'admin');
-                  haptic('heavy');
-                }}
-                className={`flex flex-col items-center gap-1 transition ${
-                  activeTab === 'admin' ? 'text-amber-400 scale-105' : 'text-amber-500/70 hover:text-amber-400'
-                }`}
-              >
-                <i className="fas fa-crown text-base"></i>
-                <span className="text-[10px] font-bold">Admin</span>
-              </button>
-            )}
-          </nav>
-
-          {/* Screenshot Preview Modal */}
-          {selectedScreenshotPreview && (
-            <div
-              onClick={() => setSelectedScreenshotPreview(null)}
-              className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
-            >
-              <div className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-white/20 rounded-2xl overflow-hidden shadow-2xl p-2">
-                <img
-                  src={selectedScreenshotPreview}
-                  alt="Proof Screenshot"
-                  className="w-full h-full object-contain max-h-[85vh] rounded-xl"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSelectedScreenshotPrevxœäZKo#Ç¾ûWt„À$9%ìjCÊØÕÃlKA$#A{fš3mÍ3=|˜Ö!‡À§œ_œƒa`ÃŒ±È!É)ù+„Iª{fÈyõˆÔJvâåb)NwWuuu×WU]CÉ¨éF¶İºy•>ºÃğ;¤¿µĞ³#Fó|eÔ´üÕLE³±~İy¬"FÆLY^äÄPÀ”ÇÈ‚ÿ›Œô:¡¢—‘ }…Œ&é£æÆâOÌ©³¥"Ë’àI:bvCÊ¨çn”DŞ«XDf×1À!`…Q‡„{½-“ô:ZÄ˜ç{zƒó¥&PcæiÚyí[Ø5	ú5H0‚…¡=ÛèNVßÓĞòFñ@>.òöÛ¨™ŸæÊ-…‰¨¦¨èsåbSU/o×²_Ø6şìªfGâ»ÔÁŒ(l…º%=ä f¡Í	vUµ°‡ØÑà{GU;]uq(¶Æ6rğXñÉFññ•úX'ÊÄ-lx#åB½ÚTıñÕ6ÿ
-L7ÕwÅ¿öãÖ%
-LJ‡¤$_¬÷æ‚ä-Q¤Tea#BÜt9ZşlnªÈ×”n… «Ìab_ÙjïTR—éS#J•:½/õ»Y«ú[…°İ˜d[U%2IlÉöôk‰)	š²Ùd)Êêfç†x.K`7{E+kÎgßÍgÿÏş5ŸıqşâñûÕüÅæ³o‘è{5Ÿıg>{™¶>ŸÏşÚêu¬®T¿$Î?—±±İ'Áû•˜ô;Î;™Ë€¸LüùeF¦¿Ì_|‰Œıü@õò‡/ç³oà×W¢™“ô:şš ïˆ°’›çîÛT¿îO›-ÔßCS‰º ”ÎÊ Ö`;$­_É‰–‡AĞl4V{é:	Cùø›*÷†òöìÑÂÀl“Xlè;K´°üü®'2.p5“‡µş¬Ú£İÁ§É½ÚâT¢è3Ï˜ #/pVÒÁ«!qªg÷¶ìßd\L€/€_•°—vt“âÏ|Rmü‰C5Ï6*6I òzøGÆĞvPÑi Ûd9ğWB+ îµ¢Ö`$pİ¹{yİô:¢u=«Î‡ ÊOŒåõ6€8$À¶d²éF¤m¼ºEôë{Ü†DY÷¹r¯×³±FìÜªÀô”¸5]Œ£)›YôéÖøëı(@•9¿˜uyß¿RëmZ’%¡V‹]j"µ„€º~Ä$±‰ÏOa²†*”Œ?Ùt%b–"¸"ßVvå4>„Ä‚ãG‚şÆ¡8uz¢´Û'b;"ıiB*ù˜O[íoø¨8]àA‰p¡Ü“Uph’6ÃIX[LS™ ñOg-û¸&´Èål2`JW¤t›-¤W$ÕD4dNÙÎÒlïëÉ|Ìj'd”³„Ã-%³¾c¾ÿñÚ‹—ĞóûeÛìÕ›g,.è4dçš«ÛĞ¼†­œ¨ÆNxRóÆÊ¾ç(Ä|w4˜4ú‡xşZü~ËUŞ$;ùQÈÂTV÷)ñûšn¥šÉªÃ™~H&ŞÈ]p%mîAúı>j hğ0&6l²LÇøLÍ{2ÄĞ¢ÂF×ı„)i®Lš<ï÷3‘o…¯yE\#ƒ‘Ïà+‰°Yñ&ªúª&Ï< ú4ş\3}¬l#Â•™Ş\>V3×ÌqÓ#U-Àe>m)K&'ºK¿] ºƒÒÛ ç+ÿ¾Vú~oÛ\eÅÕÊ4hˆ5›ı\¢¤9”1êš·n€Æ\Å¨ƒƒ‰öL[²oI^ÇâO–®¬æJ)Ñ{’ìô)¨$?Ì®Åö°Ü”Ğ§®K0òDqÁaïªİn×ïI°²…ÜIúJ€ÅC²@.eÿÄ7À"–Agq!ù·Â…ä–Vu|n½¼ºµq…JÍo‰­{AO]ÌZ'O¥åšd´¬V“twÄ€‚|œ¾_âR\x’à¶9Fô§™ôÅH­|î1lŸr·Æ™†J¢Q<û9e6L‘<‰ Ál3Ş(#€ÓRmÅá82¨k+1_t)tğzó”wØE²|o‘6ä`|è&È”§Ìö•è [>òL¯?Å†Cİ³ä‘k¬À$é)2àê…$u”‰CÌnmâË„'€&XÓ¹'¶IîkåLËnÆ>Õyl|µfÃ‚ñegYr“YYˆïÁbBšìCx«8zKí sìí‹A?Ÿ 5Ôî{×¢ê.|.ë¦+•\Óª*uQRXEFÄ·Æ[¹X¹ (
-¥‹ÂéºU×î8©²ÆµU^„ÍT+µ×Š8òÿ³\º‹,ø/+—nÉu¶½v¹4‰5oª#<DÙt; aH`¯¦UÔléô#0MnQÏàX›B_±qõ:ÖöëC÷- M¼(@ƒˆEEêHÇîÔ0¤a„íŸ¦r™`X$0JÅhyí’ÒLñ¬¬W43€ œ)ºg‡‚×YÚ´yª}FtÆoÂæù‡^íŸ¿ÖB ï¹kôâ²Õv°ßl2şô!™­K*N5Û†ÌÕŸ¦\d·
-+f«Âe¤\J'K?²=ÛgÌ°IÚ@~ÈĞl„sÕ5®}ã]´ûpö››¿<%Ïw%löN?õ•nî…šÍÄ!ä—#™|ıR®¶Ô„¸ÔIW!%@75ª¡4ˆ‰“±ÍôWvx£†ùÁ<­ºİG©
-/cuóiµkË~%ÜÌ¼f©&®„3V®cŸB|Ñ‡øÁ`r6r‘ê÷ò½¶ñ3mjDÜ6Wpœ¨!½@»%±*®%†çİ2:'Kr Ò‘:Öú5hØ0Å"ÇÜ/bçqgbØ·¨6î²†º»V…VVEºÚ´§Ÿ„5ÕK¥¶KµíâÅ{œŠäİî¹Nîá…İsC†\õÑ/hØ=HÒ¡šk·ãå¨&§”BV-B’˜ê3P×ŒYIy¥(i<œÜù–réO”Íü»ËË»ò8r¤Ìè+ÀÌ;1'ÁÒ×P¶2¯¡tKz:j[dÕ0&¹ä*ˆxz‚~øú[!ÏéÑúáÏª´Å‡¹Y©ìKÚm°µ7oı  ÿÿ …—7
+                        <h3 className="font-black text-sm text-white flex items-centxœä=ûoÇ™¿÷¯«IHµâC”Û:É>ùÕulŸ%_p{IÈ­—»‹İ¥(VĞh}EĞë·@ÀÈÕ–|®ã> — ‡ö_üôO¸o^û˜™]R²ãÔ4l“û˜ï1ßûÃêY~­5sêGHûY	}Ë=uoâ °tÆs‡!Z‡ êÁŞ³ƒı»{9Øû«øşìı'üıò`ïo{ö?9Øû‚~¿GŸĞßèõßÂï{äÇşïá$ı÷=ı|v¥A[4/Ôq¬0¼lğêL„·£Ú“şöMÔîÕğ Ãt»µ¥f³Ñj"zR[h6Ñ¦çFµ¶çt‘¿]k!\kÖ—Pàİ.î¢¶tqÀÿËŒµĞ4®B;_ª³»i÷êØµÚyUÖÎn\ü×óèÅg_VĞ2ªœ»¸¾væÒùs•]Ók,ÄJ£¿`8ëçWh¾I–ˆ~·mx½¼Ö	ókéàüœÂõc #üØ#?öwáÇ×ûè >€ßpÃï(ûÙù»ô<Å†ıOA™Œ÷”^õg-İ£>gºK±é+zË]‚Fâ	ßÒg?!3¢3äøÅæÈoxBÆ!Ö&(~ìFèW¿BóÍİ·ÙSŸÒ)|OdÓå#€ãëVu¥Ñµ·Ô'ù)õ98•é¦ƒ·‘´ÖÈt1§h†ŞÏõ ·ÃÂ§@O(ˆ¥íX;¥&¡…Bó	-Ô¶‰Ø­ÄÀØÆ†Ï8ëvÚ¢«–İ]6#µš².ÆÄK&mÀÚƒıÿÙ±çZÜxõ w‡\­ZÎêÌ¢ÕS¾¢Ÿ¢j§Ş‰¯[À
+PhÎÎÁßzä]°·q·ÚšÕQ¬éÅ´×Ã{§ñ´£Èv{!¬¢¬¦tCô“†j2zôÈ×Zî@~mÁä:¸6†o:ˆ¶t]é/æ@cC«Q}ÈÇ
+1Š8Ó¯lò<ºòy´Å:Lc	ùmÃî´bg(Á‚ÙXµĞ!
+ÓH3sj¥a›Q5ŞáøŞÆ˜Á0°"@²ÓÑŠp@`JñAÂŒû°èE9 Ï×Qüìp;$xÉvïÄ Wƒ:laA´-Bµ=X+Âµ“ Ø“MÇˆÑª/é—[ÅzÈ?µQ`ùY¨şbFöæ¸ÖÆÑc·PÌXq¬6vÊ#˜æ³§OQ!LÏñÚ˜İ[n!¶Ğ²# v†`üõk—rÛÉ¶ûS¼e‘#dËzz°ÿ±¼±ŠB+ºx†Ô’RNˆÅ"²oRŞ1Gl®á–#Ûíz£ºãu(íÔ½ÀîÙ®^È)Øôe¡|ÃĞŸBT¿MìıÊlog;‘¾¦àyƒî¡XˆĞñ[ºı?Še{Lå‚ìŞS*º¡å)½ë.€ş×b$ÈËTpsUHL0ÍGË¨E~¸ÜhŒ½aĞõ–í’}köàaNÔŠ‡-!ÀÁBÜÍ‹ofÓ$K€V:^çV=Æ ™S§9V‡!\8½Ò —ŸbKv/~8ü~p°ÿïLƒß1A
+æ¯Å½$¥åK`á`™~¼Q1²]ğ>ûğ€aàÌ.JM…äüÖÍ
+b‰hF™%=2ÍyÓÈ>°AÜ«;“RB[–3Ä«fÚ­•Ï=Û·ÜRÅTjÚ1ªB!®eV­úŞ¢wVwP½^'?çP2…e„ë‘ôpT§³E»³³ÿdxÆ®~¶œÛÃ(ò\ó‹:vç¼çKzM5ôŠ^Õ÷FFÕÊÙa…n=ü~Ûº‹p÷XeUlwÓ«L»|ÙÙR•Äw¡>´Ùã`vßÛÂÁr|èx³™fÏ-ñ3£¤hµ&Î7‰héÂ»éŒc2ŒëiD?ß‰åƒNà…aß²A¦µy•¤€®Ã¾/Àû¿a§cËy$¨i…c·ƒÊ hŒ® H¼ÖØîºµâº„ÏQ0Äˆ	x šUˆ-—0“UT-à4 Pö Z8°5²ìˆLğœ×©vÉß6`wÈõ"‚éâA·:ôIP×ŠŞºÌNp®ğ–4‹-¸i¦‚@uíáeD–H¼è}S4şâ‹ßä•"a†Öî¢pØéà0Ü:Î˜’<?`¦zòé[~dwªeoØEÀ§:}T…·°Üñl1:%ïp>¼€L Eæ¾Œ* iãú kõ0Ì“+Š§°i» Ï•7-',ÂeW4²Ì®Rc§nGÏqc«t	Ç5`Æ·RŠTV·J±[`v°5½öª_t:¯¤8Õ%†ƒĞ·]„ÓR5-sõK­ş]P>Í9ó:ùHÇo6)!fÖ|Döº^`wù‡§!l' Ÿ&?[TD]ÔŠ¨Ä\ĞªÅZ'²áíÖ#+êBª9dì'šÈ¯-¤Ì}-ı[	¦×äá{`%VH6/ÙJ8(Tk2¹Á`¼7!©5ŸpîÜîÔî‚óükì/àÜ½øüÓCúŠ,¥Õj6G?‘oÎ‡¬aê(l-H¼Jªp(¬ˆ0¨‹}¸²|?ğ@Ô¯¼ïQ*b2‹GœÈVÑ15¼~82ŸğròV/A‚ÉiDD’õ¡üLŠõŸ´dq;–ŒBFüoí$#ığñ)íˆ¹²{ìök-'ı®Ep…ô=¦–¦•`R¬ğö¨FK*]Àş@u»”˜ fÃ§D=KÏØıß2¯šÖ
+– ;áÄiß/ùM½]™­M\µ˜™Ä±…f¥àIËôIEf½/9ıÔ¬ÙôäİÛz –Önwné-ÃîÂeé”|ÈÇWàÙålã†¯ÒBr·Ğ§ĞÍ¶–ÜÉİâ­”ôf«ê)7%âŞ_ ¸7]®R/JõmE(ÇwÌ¼;uìF¢«$&RÉkfr¨•v×ï¾ı
+eeƒ:bá7ôüGÔğ	µê?ŠmëÙÚ8n•ÿ.m<×Ç"<|`¥´'\0lİè_† J¡³}Û7©Ë;wÄ¡A›(a&uğÆÒšoÂ_ø¿Õ¼YX~µêw"f85òŞb|îàñêhÚğÈ§¬ŞM>’e¸¬í7¤ËæDD¢y¥Ùµ"J©æôP?•T“lÉœùl¹äcŠ‡Y]]%Ó/CìÃ‰M"e€È¸ 	Á3›CÑ~K>lÏñ)’L¶Ú„±Æ»«8RôÓŞJ>f]pš`ÛÛfÔ-´#dBóVf Ê‚0¿"ß— wH f&“í®îÌ›—r`mÃ5Í¦ùªòÎ4m|g2OXíËì,Æû'tŒ	Å*¥o!¾àxVTÍz¿fiìÑÑ([YD\¨kƒ{­{Bc/§³¿4e{*uI+_kX8âúxFkÎøèóÉR¡ÈË«YÑj2Íybİy
+í9¯?O©/›5æRPä‰ôz˜ä‹v-j"7íY%¼–ÆBË¹ö„â‰ìEXNĞ8¥¥¼g‡‘lâ’×;\ä‚R]ÓE˜æ–Õ½^j¤¥1úEáOéóÕœ œ2w•Y}`´Áq²Róı!‚ªˆŞD¢…
+ÔKli˜W9í®T œ.¼ØÁn/êï¯ï êèì«%b…•çÌO¥z„oeŠ•ƒFß•­W¹›ãUlı+qwÙS9Bäx½î¢1ˆ?“³’YĞÊ¾rlo!Bh­_;ÑD„9o:Şò£öªƒUaÉ;ê°dNF¶L•W2Tİî–ß}²6ZÙ"¥æÄ¼äÓï9:ˆ4"xU÷NÎéâ‘d~ étfNı3ÃY\ç¡…FIícLF%l.Áfà¦_§
+É¯ÒğUŒÛ||‘©‚rÅçs.Ód:uî8d¹» âĞ£YAu½øõíTÑIÊ>ìöÈy1²şézäƒé•2odoåwVIšÈ%¯c9x=
+`?®Î–³j\ÃdòÎ¸pÒ% Pæ˜»×Š	P‰Ïá §Œ'ÂJÊo^ê?¡-'ã”HÁIÖ ¥×©à½Æ´S)eRõõÊÃÒ ÒY* _?ƒ6ÖÎ,£µ‹èt‰$®_¿zõÊµtñò™+ÿ¦ŒypÎ°½aµ©j›ï{ATAï¼£ØÉVhˆÕ%{¯³ë®Z.VÃY6¿€‡3¬îŒ°pÅ\Ç”Ï£cğp¥¥Z'Ïİ )ÁÁkâ®Ø~À=L3h¹¤­1ÕÊZj½ÅÄd–È#´˜¤´Rğ…JŒzyD?ë9æRÆİ5`£ÀïAĞÙ<«:‹vMƒf¬šë´šu¢škŸPìĞ=h¤œÔ°·»O¾	Ä_³Ôæ>ùŠ ¾È[xÌ•ªHÀÑÏèÑçûÅÉ¤¥úÏËøœ8YªW.ÏšÌÅÀ²_|şéÏì‰¸eß8³Pô©n$2") ’nÎVô°Lù_…9†¼Ÿ°‰‘&
+Ì4)ãÕã˜[‹å–|gÑ|ÉN0‡"K¼aòs‚ ¬9G…£JÓM<³Õø«ê:Ê‰”¢8‹ï&?òWæ¬¡À£abvŠô98úEx55ü’€Öbã8"• 'ft†Z^$~]šƒÊ¬[e—-Hu ~´+´v‘?ã}¯k9ê€païëckk,ƒHCZZ%:è$0³A­ÕDT!v˜Á2ûú.ú%D™éV× Ô"¯PÌOØ¶l«6ÆQâ¨qÍËßR7,Æá:~×BÖ$G^HÜZ‰aö¸Úæ­wıí[­%ø'èµ­jkqin~éÄÜüüh2³7…¦'¸ÆÚ˜6ÖVSµuyN*Mœ`ïq³6ß\BäN.¡ÌÛG€»¡Ô|Ï&OÊªm‘9 …ƒ}`<û_•dVU	UgÓÃfÉA–5Ë wçDA¥	*ğ 7÷¿Âò”H­vè9Ã#@¿6˜`_F–}úo6èFÒ³&X
+tËµz>kœ}Ï¼´–—•…™."S’‚7fNé–[ù8ylÀØy†±Íz+Éëoå-Í¬LF"¯g^T‘óÏWY…óÜí%ë„É]¶¶ìK©>c_[q­--gh"oF5Áš1S¸ñãæñfw¾{“æ8Ã+v zÛIòP-Êù†“Èy½©Ö¢ëB­D#âml3ëaM|Å"ØÃ|•pZí	+L/#)”’A†
+¼^µå	†ëÉ_Ûù2á_™,É|*uÚÙ °Äì˜®@gGI§üú‚1%!Ò‰‰•óßL&˜,ŒÈùRƒÌ†£¼âr,#HÁpÿ=ä°ªH]`ÿÑƒ›"ªÒ]öú œÏñµ9Hq>aÌ ñŞş
+}ÅWüM`+FØ+¥«W
+{6Åô"ò@^’#Fµ“°—ŸDµA”rbĞ=L£œ´‹‡’ÔW¸ÌY=ìü[¦†,ğÅ›“Âì¥Däˆx¸@ÜQ…ÊauÎ Ì¬¯ËıÀÛ´×|S“|m˜Ñòˆ¹]eï6ÜwìpMhÃ*“ .æ§D*}7$ Pœ‚€ÉËâÒPÀ$•Ö€#D 
+%³/F „ÏàP|SŞP“W,Ée:7rP©<2Q¼PÛÛÕ±#öJÄşS²â°Ş	0va[HTò–GˆšdSHˆÜ‰p7¹^\ÃQ…Ë5Í»®¯êÂ¾’³İç´Ri'7NÂçf¢†å´“A·x·!Şy®½ÿÒƒŒREÔv”]úÚ&0cf,]œ+9‹ Ì0§ø“Í­şÍŒYé?&›TŠCìHï3ód¢!µSvÅôT<!è¬ê«´Õ9Ñêğ5o3…<*uF‚ ÒBŸıçµÒw#•¯Ã‰%²‰W=?¤"RYl~h””^1¶…SÈbl]‹ÑòD3O”¢Fµ°4'Š±TƒqÈ·<Ä¼3ÿŞÊ 0ç¢şV¿Òª©ì2ò¡¼é‚Eô¢«0ƒ¼˜†ıô½»\Ç.Q2#§˜o6o–ãi°å¸‰`œ+äÍk†„%Su¸4}36Ùµ¥TYÁÄ0J6‰[‹MamÎÑ?õ³@J:ó[÷÷°E&¢Šİ›8ÈNSX˜Úµ¥+ºdx‰6P%¯¤0"Ê†å$ë;o\úB¤ó4®%-9) ©å3nšâ=ûÚà 9~qæ”LeU‘Ìô-/”Æc°÷eºFìqô+¿¨¯‚;IB×#:ö3n%5ÊØ¤’²Éœ²|¬GôÚÒÉXêù;»¨wŞ¢Í×*
+Uœ0Ş—¬iÅ>S+¨›7%7œ‚jEq¹v9#õ×k"¯3vìx:+*•!”K’=S’vQÖ¤ğhØÏtpïi¦ğk]”(3¼wÇè‚J1Ò8æYÉ@v:iØªãAT£úÏc|"»:Çö’´ë$a;’ñÏ!ØÔ1iĞŸrİñ60Á¹c'O#:`Øl÷N­LõØìãé´Ä›A‹Ï‰åp H'šç€ÍBÏÅn½L`tú¸sçÁÀë(A¡ßõòÙÙ›@z5vT¼Éˆ•2µK$ªÉ¥÷Åô–ÇJ¤wuÜ¡1ÿ¹´£6¾Áœ5ÈtŸ¿ƒ>\8­®£~Š|§vROºæÌyŠu<D?çûñÄ"_$ÕÇæ’üÈN¦AÎâÓ¨M¡SÒÇ<F±.G]¡T¥›o´PnE©Æô@
+Ë–²FÖÓg"¼Bj¸ŒGJ()nÕâ¤’Ç¢şÿÿRymÿ	ËÉÇö½yÄâÂš†Qà¹½òô÷‚V.Kw¿:!JÍK(4"d¾)	F(@ßĞßŸÑï2ºÊ›D'×pÇ¤R~Oa ‘}ÂmE=HYŠ!ƒşÏy#7×ÉB½”Ğ¸nxp×Á‰:FT="Bû6±‘Êuß#Aj+•¦GàÍ‚.ÕµOÊ› °Ûå1}~”8„sHj#”A/®VòªégŠ–-/½ «-ryéiÔø³–Ûİ@Âô€òÊç©ïGf«3)P›V”Ú›& ¹5?°V0®=Û´y‘Ue°ëôÂÒË¬œ¥)·µ '¹L}Yó§XùÚz½^”†<Ešê„¹Ù´Öm1ƒLæ~&‚$‚A#6H~%$§z5u^Sñªğ`	OMœişZz›w¨ÓzkÄÅ/ÛW³@¢D³.›%½ËFçË-¢^˜Ø+#Å=µYØSâå!AòÉ/¸âÆ›Íãó­›Z/Äbâ ZØæŸÄ©›2œ&n ŒYJ­~S¼>¤üùGêÈT•–Na˜ ,Mv¯$ñiêHµÉŒs={3ú~=ESµ|blÏĞ¤rÿ/¬³_Òğç¹°a©mA…¿”‹JL§¢òys;`g,2ª°èÅ‘¸¿‹‰Lœ¹Ïšó(J2¯Wœ&òQ¯ğ.í}$VUU£ğ{òvqY7Ãü¹¤[ÂÁ”õà
+Pê]Lå\HÔkíZº$*¬‡è
+Ì›[•áÛRíûƒ—@©pÂTÈ"ëîˆw'¶æ:Æ=AM˜6s˜‹*÷Õ]µŒåÓH^FnÎvˆJy÷wH(mª)0¹ÀÁah’«{¹/¹>åíÆRoı“ô$úCäoöï£*a]æ^Ó 0Sı€Ô6 P <o.IøN—68jfXñ?5…ˆ‰hf®BL
+ù-™KOEV!8®‡•îQø{S’d&†³‰çÇ*íLzÆÛ.Åñ3xbî@š/–êI*X®©«^© ¨¢.è´Úòåv&–LÕ²²İçJ¸»ó(‹º<š½á‡À×\g×–Cøİ~Œ™l÷âÖ™€YÆò`p1L¯Îez_kŠ³§,…q{;f˜ÌGÖJçB@¾â:cÍiî_Ğ*"ÚnkÚ;HyÛ¹¢ŸÉõ S‡Hµñaã§o5æHÏ¶İíïùVºÂéºh÷É[HŞ6<r™<RÓ¼ò0cëœYvDkß¢a)Z“9}Ò™ĞF@˜¤Ê¦‹EÌ+K'ÉøjPjdæª¸¥[N²ÒÁ”[¬¾1@×—ouYF¹Ô;í·=+èÖG¼Ë ²J–ÉPûUjµWªK®Ä·x²ëş_\£¥l3¾Ò%rµh³†Êæ¨ğll8ÊW›ÍÕ™0+¬úr€êP0Ï§›¸…ßšËà[1–MUíb­<3•íQl):¹Xµ£$vü	¶ßŒíFWS•ˆÆ_’y,ÖCƒ×’j§:¼ÜX£­XèHFÉ±:3mÆáI/ÜëLïRJa.ePíùÔH«GD¶œb³«FWrZÖVj)ë^Ç&]ƒú°ÁOäÅ—LS-“iÊR¾IŸlb;·EcvË·ë£¾…–ï“*†»İÓ°Óa—4E¿~íâYoàƒ\ájK¤İşûıO¢kĞúûï£«k—Ï_¢AmÌó±°À²’cß¤ºµÓo¼Û<»>êy"TÈìÊOÄ	¦6>GÂV@Í¾4@‰xS't/]É	«ñóÔ ÷)=±«ŸûĞM™ŠïÍ!zò9y²?"Çâ`¤Ï²Æd’ô(KÊxÆ0‹•E#Û2»‡¶˜‡£|èşış|Äúçü‘r—ı`]è—Ö›ÿHµçq„Ôè2}œ.IÆ
+Æİw3Ã×tñş”Q`–?tVŞiMÇÔÔ'fu]WX¬ÓêÌ-ØPİ;j`gutM^œW}Q©<£¦›ŞÑC­¥sï¾{3“Ö˜ÍíõÉ©ÅŒ
+ÉtqRÁS	æ’Œ5½' MKpnd,-Áï§ûä†5¸²S“fn©ÃK1Ê¨>À<¡1œÓğw"99E½rzz9Ô4»û~7©vÛ ÷3v™¹~Myà½xwùÙe+?o<îdÀùQóSjg'_%GØÁ½ÀN..Mæü¶Rd?¨ÆŞÅñb„>ğ‚;!úÙĞîª{)mÆ³ÜJºÏ‹Š”ÔZCÕ9Q¹yhÂ6zÛ¯Rp&UXyæS!¸(}ıZ4
+|ÂÒşö'Lh9m¬ºcÆÊ0cO+LbÒKS*2}Å±54ˆŠòÅdíwT[D}EÉ§Ä£ jJ=%5Ê;ÏlÛ"÷"Öœà`¿ cJË<ËHyÈ¸t¾¬0ëù4£™&Õ‚)ãM*3÷sfg§^HÚa•öŠ4ù*ş³(Ú‘ƒ3³Ö(Ş1˜º²/¶Ï§ÈİX]cW}Ó Où€·AAh_û|Ç•ÆòìñÖö$eÖŒ¸gè›ÿ]tı]IQ€~ÅlE±n›Ñ`™Ğ#ÒßâÊ¯¼¨@ê·Ş*°Æ.fC<Ù>ÏØ#dÄeqwcÅWœZ%˜Íó1g0#S»Î±iĞj¥1T¸ùL’Æûcc'°IàË…#Mí:6µö*lŞ<•WyŠ^©ìiz×(ÑœËo]g®£íË•‰®QµåŠ3d3¡KÜà^0?¿ AW>…?×D<- k©P¸fª“hvtSÉì0åº·%Ö1Ú½€™ñ>0‰-rìŒ°’6Ë1.(‡ıüFh¦<‚-¹÷˜¸ºìm’†mĞ†×4è}qq²^bZl)ÛJ¬ ‘XÙ6bU#Œ;nl#ft	ÕL;}”µ9<¹¢¨›W6ÀÆ8BšnYÔ.C~TvR>ÓÊX…|v×<ó)û5M×VK9Ù—ÕbkÚ[ÅíµÈÏÒ-¶–mAÂãY3qî¯pØQĞ•iµ¥iì¦l«%G°€XÁÖæšm•jµe +1ËÿâØ‚xqQ‹¦òÁÄ$µÕ9ä`ñ´®˜©<M©k§K§“{Ğ¬N º‘>©.ÛF‘UGÆÌ^$MÕ¯øØ]UŒ&¿+‰ğB,evHjÔ©)3»±¡Ù“ÏXIò]İIıP]G£ñY­øÕé€|½U/4;\³×@¸¸†}gFÚòä—‹÷ÜÀ¯öZº|åyÓıâ5U·‹®¦û…œcÌÊ¡½…²£4ÌË»º¡5×ŞÑæ`ÂU~µSùé…s*,%÷¯æF)‹>DphNŠCÊ›8ÚlĞŞ=Ñ†>ºˆËH¾É—[Ã®íÁ»åOäIôÌÁ9}=päÛ²gå{CÂñ5$‘>—»ºK^Ï[åÍùO²bÒ üL9V’­†‘äˆÂXø^3h>ö§LÛ—\dÀr6šÆ»QêÂ9´ÑúDg)BØ¿-AK¨çèµÓ&jKå·UsK•Ü}	)ÚUİ-™t­*­ıƒLœf==tår[ú5[œ¸\nâ$Ä¤Ö¶~ºi“¡}“á S:—Êi@Qg ­{¬S%½¡m’là³}X#{Ã m£a 2 İAËİ‚eØ²Ã¡å|¯¹¼iöP6•·(ï–´xHÂŸ_³ÜÛrA‹JÛ©^¡ÕíI¨°ºñŞù÷Ïß:{åò…‹?[ŸE0ß~€1[Ñ7g™õ)"¿~Ç”9Ğ—ŸÄ(:²t40À=5Ëdvúp[nã¬G^`õpn¿œ¡Z	ƒ[İ[ôşÊ*1NAOñ)´»s[\àÜŒmÀ›Qa‹ö‰’• eñõ4ª¨Yiº/‰¾fDKÑ€$ù,ÓÁ…-PŞ>r)òº¡t‘B¥}ˆŠş™Ô’Ş3;–oƒ|Ò‡Á\°“¡‘b}o® 8ÇŒUn‘0p”×âÙ»'È	—S¼CÛêö˜!ó"ÙY$ÙLzå÷íN¨µŠ™]<úpn•‘£,§3P›2‘S½Ú¹ÚÆrxSE²Ûî²ÁMtø‚ì,ßË…y UtÌÎquÈPvíbrU•Ü©eYFÉ›FRs;+J;Vaó%ò)¬òRä1e½’9?S€]Ï)SëÅ ºK…s0Q†¼•*C¾ÔÅU‹F¦fcj¢Ù‘¦xå2zñÙ—t>¤Ñ÷‹Ï?UÒâË©¬¥<ÇÇÇ ´»?ú   ÿÿ _Fˆ
