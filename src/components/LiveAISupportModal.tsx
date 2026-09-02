@@ -88,45 +88,51 @@ export const LiveAISupportModal: React.FC<LiveAISupportModalProps> = ({
         orderBy('createdAt', 'asc')
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const fetched: ChatMessage[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            let timeStr = '';
-            if (data.createdAt?.toDate) {
-              timeStr = data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } else if (data.timestamp) {
-              timeStr = data.timestamp;
-            } else {
-              timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            }
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const fetched: ChatMessage[] = snapshot.docs.map((docSnap) => {
+              const data = docSnap.data();
+              let timeStr = '';
+              if (data.createdAt?.toDate) {
+                timeStr = data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } else if (data.timestamp) {
+                timeStr = data.timestamp;
+              } else {
+                timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              }
 
-            return {
-              id: docSnap.id,
-              sender: data.sender || 'ai',
-              text: data.text || '',
-              timestamp: timeStr,
-              createdAt: data.createdAt,
-              imageUrl: data.imageUrl || undefined,
-              videoUrl: data.videoUrl || undefined,
-              source: data.source || undefined,
-              adminName: data.adminName || undefined,
+              return {
+                id: docSnap.id,
+                sender: data.sender || 'ai',
+                text: data.text || '',
+                timestamp: timeStr,
+                createdAt: data.createdAt,
+                imageUrl: data.imageUrl || undefined,
+                videoUrl: data.videoUrl || undefined,
+                source: data.source || undefined,
+                adminName: data.adminName || undefined,
+              };
+            });
+
+            setMessages(fetched);
+          } else {
+            // Initialize initial welcome message
+            const welcomeMsg: ChatMessage = {
+              id: 'welcome-1',
+              sender: 'ai',
+              text: `👋 স্বাগতম **${currentUser?.name || 'প্রিয় গ্রাহক'}**! আমি **RF SMM AI লাইভ সাপোর্ট সহকারী**।\n\nসোশ্যাল মিডিয়া সার্ভিস, ইনস্ট্যান্ট বিকাশ/নগদ ডিপোজিট, ৫% রেফারেল বোনাস বা অর্ডার সংক্রান্ত যেকোনো প্রশ্ন বা সমস্যা আমাকে জানান। আপনি ছবি ও স্ক্রিনশট বা ভিডিও যুক্ত করেও সাহায্য চাইতে পারেন! ⚡`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              source: 'smart_engine',
             };
-          });
-
-          setMessages(fetched);
-        } else {
-          // Initialize initial welcome message
-          const welcomeMsg: ChatMessage = {
-            id: 'welcome-1',
-            sender: 'ai',
-            text: `👋 স্বাগতম **${currentUser?.name || 'প্রিয় গ্রাহক'}**! আমি **RF SMM AI লাইভ সাপোর্ট সহকারী**।\n\nসোশ্যাল মিডিয়া সার্ভিস, ইনস্ট্যান্ট বিকাশ/নগদ ডিপোজিট, ৫% রেফারেল বোনাস বা অর্ডার সংক্রান্ত যেকোনো প্রশ্ন বা সমস্যা আমাকে জানান। আপনি ছবি ও স্ক্রিনশট বা ভিডিও যুক্ত করেও সাহায্য চাইতে পারেন! ⚡`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            source: 'smart_engine',
-          };
-          setMessages([welcomeMsg]);
+            setMessages([welcomeMsg]);
+          }
+        },
+        (err) => {
+          console.warn('AI live support message sync notice:', err?.message || err);
         }
-      });
+      );
 
       return () => unsubscribe();
     } else {
@@ -595,14 +601,12 @@ export const LiveAISupportModal: React.FC<LiveAISupportModalProps> = ({
 
         {/* Chat Messages List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
-          {messages.map((msg) => {
+          {messages.map((msg, idx) => {
             const isUser = msg.sender === 'user';
             const isAdmin = msg.sender === 'admin';
 
             return (
-              <div
-                key={msg.id}
-                className={`flex items-start gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+              <div key={msg.id ? `msg-${msg.id}-${idx}` : `msg-${idx}`} className={`flex items-start gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
               >
                 {/* Avatar */}
                 <div

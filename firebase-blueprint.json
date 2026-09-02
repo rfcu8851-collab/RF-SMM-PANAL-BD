@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with balance and referral statistics",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "balance": { "type": "number" },
+        "total_orders": { "type": "number" },
+        "totalReferrals": { "type": "number" },
+        "totalReferralEarnings": { "type": "number" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "AuthUser": {
+      "title": "AuthUser",
+      "description": "Credentials and authentication lookup",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["username"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "SMM services list",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "desc": { "type": "string" },
+        "apiServiceId": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Social media order data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "link": { "type": "string" },
+        "quantity": { "type": "number" },
+        "charge": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["uid", "serviceName", "quantity"]
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "Deposit and payment request",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "userName": { "type": "string" },
+        "method": { "type": "string" },
+        "number": { "type": "string" },
+        "amount": { "type": "number" },
+        "trxId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["uid", "amount", "trxId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records"
+    },
+    "/auth_users/{authId}": {
+      "schema": "AuthUser",
+      "description": "Authentication credentials"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Catalog of SMM services"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "User orders"
+    },
+    "/deposit_requests/{depositId}": {
+      "schema": "DepositRequest",
+      "description": "User deposit requests"
+    }
+  }
+}

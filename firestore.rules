@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Public settings (welcome configuration, payment methods, referral config)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Public services list
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Auth Users collection (for username / email authentication lookup)
+    match /auth_users/{authId} {
+      allow read, write: if true;
+    }
+
+    // Users profile & balances
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Deposit Requests
+    match /deposit_requests/{depositId} {
+      allow read, write: if true;
+    }
+
+    // Task submissions
+    match /task_submissions/{subId} {
+      allow read, write: if true;
+    }
+
+    // Tasks catalogue
+    match /tasks/{taskId} {
+      allow read, write: if true;
+    }
+
+    // Referral commissions
+    match /referral_commissions/{commId} {
+      allow read, write: if true;
+    }
+
+    // User notifications
+    match /user_notifications/{notifId} {
+      allow read, write: if true;
+    }
+
+    // Support threads & live AI messages
+    match /support_threads/{threadId} {
+      allow read, write: if true;
+      
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

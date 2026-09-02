@@ -523,11 +523,11 @@ export const AdminLiveSupportPanel: React.FC<AdminLiveSupportPanelProps> = ({
                 কোনো সাপোর্ট মেসেজ নেই।
               </div>
             ) : (
-              filteredThreads.map((thread) => {
+              filteredThreads.map((thread, thrIdx) => {
                 const isSelected = selectedThreadId === thread.id;
                 return (
                   <div
-                    key={thread.id}
+                    key={thread.id ? `thr-${thread.id}-${thrIdx}` : `thr-${thrIdx}`}
                     onClick={() => {
                       setSelectedThreadId(thread.id);
                       haptic('light');
@@ -666,7 +666,7 @@ export const AdminLiveSupportPanel: React.FC<AdminLiveSupportPanelProps> = ({
 
                   return (
                     <div
-                      key={msg.id || idx}
+                      key={msg.id ? `msg-${msg.id}-${idx}` : `msg-${idx}`}
                       className={`flex items-start gap-2.5 ${isAdmin ? 'flex-row-reverse' : 'flex-row'}`}
                     >
                       {/* Avatar */}

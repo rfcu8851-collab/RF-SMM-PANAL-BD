@@ -1,10 +1,14 @@
 import { initializeApp } from 'firebase/app';
+import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signOut
 } from 'firebase/auth';
@@ -27,23 +31,34 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD9g7l32oBL8iU1PCYghhlqHUGSvNNo-0g",
-  authDomain: "rf2smm.firebaseapp.com",
-  databaseURL: "https://rf2smm-default-rtdb.firebaseio.com",
-  projectId: "rf2smm",
-  storageBucket: "rf2smm.firebasestorage.app",
-  messagingSenderId: "738689283525",
-  appId: "1:738689283525:web:3d4463c5b1b8167e31c7ac",
-  measurementId: "G-6N4GZML6EK"
+  apiKey: "AIzaSyApoPnFRSeWP7xICyGGJFnm6ndK7Y8cu0g",
+  authDomain: "rf-smm.firebaseapp.com",
+  databaseURL: "https://rf-smm-default-rtdb.firebaseio.com",
+  projectId: "rf-smm",
+  storageBucket: "rf-smm.firebasestorage.app",
+  messagingSenderId: "512750525372",
+  appId: "1:512750525372:web:475b807d2875a695bde9b9",
+  measurementId: "G-QQ14DBLSWW"
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 export const db = getFirestore(app);
+
+export let analytics: Analytics | null = null;
+if (typeof window !== 'undefined') {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch(() => {
+    // Ignore analytics init failure in sandboxed environments
+  });
+}
 
 // Default initial services with REAL SMMGen API Service IDs (+20% price markup included)
 export const DEFAULT_SERVICES = [
@@ -463,6 +478,9 @@ export {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
   doc,
