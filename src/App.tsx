@@ -81,6 +81,7 @@ interface UserSession {
   name: string;
   email?: string;
   photoURL?: string;
+  telegramId?: string | number | null;
   referredBy?: string | null;
   referredByUsername?: string | null;
 }
@@ -817,26 +818,127 @@ export default function App() {
 
     const initApp = async () => {
       try {
-        const saved = localStorage.getItem('smm_session');
-        if (saved) {
-          const session = JSON.parse(saved);
-          if (session && session.uid && session.username) {
-            setCurrentUser(session);
-            if (session.photoURL) setUserPhotoURL(session.photoURL);
-            setIsLoggedIn(true);
-            setShowWelcomeModal(true);
+        const tgUser = tg?.initDataUnsafe?.user;
 
-            // Attempt background sync without deleting session if rules or offline
+        // Auto-login if inside Telegram Mini App
+        if (tgUser && tgUser.id) {
+          const tgId = String(tgUser.id);
+          const uid = `tg_${tgId}`;
+          const rawUsername = tgUser.username ? tgUser.username.toLowerCase() : `tg_${tgId}`;
+          const firstName = tgUser.first_name || '';
+          const lastName = tgUser.last_name || '';
+          const name = [firstName, lastName].filter(Boolean).join(' ') || tgUser.username || `Telegram User ${tgId.slice(-4)}`;
+          const photoURL = tgUser.photo_url || '';
+          const email = tgUser.username ? `${tgUser.username}@t.me` : `${tgId}@t.me`;
+
+          const isTgAdmin = (
+            rawUsername === 'rashal117' ||
+            tgUser.username?.toLowerCase() === 'rashal117' ||
+            tgId === '7386892835'
+          );
+
+          const telegramSession: UserSession = {
+            uid: isTgAdmin ? 'admin_rashal117' : uid,
+            username: isTgAdmin ? 'rashal117' : rawUsername,
+            name: isTgAdmin ? 'Farju Admin (RF SMM)' : name,
+            email: isTgAdmin ? 'ihicggh@gmail.com' : email,
+            photoURL: photoURL,
+            telegramId: tgUser.id
+          };
+
+          setCurrentUser(telegramSession);
+          if (photoURL) setUserPhotoURL(photoURL);
+          setIsLoggedIn(true);
+          setShowWelcomeModal(true);
+          localStorage.setItem('smm_session', JSON.stringify(telegramSession));
+
+          // Background cloud sync / profile creation
+          (async () => {
             try {
-              const uSnap = await getDoc(doc(db, 'auth_users', session.uid));
-              if (uSnap.exists()) {
-                const uData = uSnap.data();
-                if (uData && uData.name) {
-                  setCurrentUser((prev) => prev ? { ...prev, name: uData.name, photoURL: uData.photoURL || prev.photoURL } : prev);
+              const userDocRef = doc(db, 'users', telegramSession.uid);
+              const authDocRef = doc(db, 'auth_users', telegramSession.uid);
+              const uSnap = await getDoc(userDocRef);
+
+              if (!uSnap.exists()) {
+                const startParam = tg?.initDataUnsafe?.start_param || '';
+                let refUid = '';
+                let refUser = '';
+                const cleanRef = startParam ? startParam.replace(/^ref_/, '').trim().toLowerCase() : (localStorage.getItem('smm_referral_ref') || '').trim().toLowerCase();
+                
+                if (cleanRef) {
+                  try {
+                    const qRef = query(collection(db, 'auth_users'), where('username', '==', cleanRef));
+                    const snapRef = await getDocs(qRef);
+                    if (!snapRef.empty) {
+                      refUid = snapRef.docs[0].id;
+                      refUser = cleanRef;
+                    }
+                  } catch (_) {}
+                }
+
+                const newUserData = {
+                  name: telegramSession.name,
+                  username: telegramSession.username,
+                  email: telegramSession.email,
+                  balance: 0,
+                  total_orders: 0,
+                  totalReferrals: 0,
+                  totalReferralEarnings: 0,
+                  telegramId: tgUser.id,
+                  photoURL: photoURL,
+                  referredBy: refUid || null,
+                  referredByUsername: refUser || null,
+                  createdAt: serverTimestamp()
+                };
+
+                await setDoc(userDocRef, newUserData, { merge: true });
+                await setDoc(authDocRef, {
+                  name: telegramSession.name,
+                  username: telegramSession.username,
+                  email: telegramSession.email,
+                  telegramId: tgUser.id,
+                  photoURL: photoURL,
+                  createdAt: serverTimestamp()
+                }, { merge: true });
+              } else {
+                const d = uSnap.data();
+                if (d) {
+                  if (d.name || d.username || d.photoURL) {
+                    setCurrentUser((prev) => prev ? {
+                      ...prev,
+                      name: d.name || prev.name,
+                      username: d.username || prev.username,
+                      photoURL: d.photoURL || prev.photoURL
+                    } : prev);
+                  }
                 }
               }
-            } catch (syncErr) {
-              console.warn('Profile background verification notice:', syncErr);
+            } catch (err) {
+              console.warn('Telegram auto-login cloud sync notice:', err);
+            }
+          })();
+        } else {
+          // Standard browser session check
+          const saved = localStorage.getItem('smm_session');
+          if (saved) {
+            const session = JSON.parse(saved);
+            if (session && session.uid && session.username) {
+              setCurrentUser(session);
+              if (session.photoURL) setUserPhotoURL(session.photoURL);
+              setIsLoggedIn(true);
+              setShowWelcomeModal(true);
+
+              try {
+                const uSnap = await getDoc(doc(db, 'auth_users', session.uid));
+                if (uSnap.exists()) {
+                  const uData = uSnap.data();
+                  if (uData && uData.name) {
+                    setCurrentUser((prev) => prev ? { ...prev, name: uData.name, photoURL: uData.photoURL || prev.photoURL } : prev);
+                  }
+                }
+              } catch (syncErr) {
+                console.warn('Profile background verification notice:', syncErr);
+              }
             }
           }
         }
@@ -846,7 +948,7 @@ export default function App() {
 
       setTimeout(() => {
         setShowSplash(false);
-      }, 1500);
+      }, 1200);
     };
 
     initApp();
@@ -2822,6 +2924,46 @@ export default function App() {
     }
   };
 
+  // One-Tap Telegram Login Handler
+  const handleTelegramOneTapLogin = async () => {
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (!tgUser || !tgUser.id) {
+      showToast('টেলিগ্রাম অ্যাপ বা মিনি অ্যাপে খুললে স্বয়ংক্রিয় লগইন সক্রিয় হবে।', 'info');
+      return;
+    }
+
+    setAuthSubmitting(true);
+    haptic('heavy');
+
+    const tgId = String(tgUser.id);
+    const uid = `tg_${tgId}`;
+    const rawUsername = tgUser.username ? tgUser.username.toLowerCase() : `tg_${tgId}`;
+    const firstName = tgUser.first_name || '';
+    const lastName = tgUser.last_name || '';
+    const name = [firstName, lastName].filter(Boolean).join(' ') || tgUser.username || `Telegram User ${tgId.slice(-4)}`;
+    const photoURL = tgUser.photo_url || '';
+    const email = tgUser.username ? `${tgUser.username}@t.me` : `${tgId}@t.me`;
+
+    const isTgAdmin = (
+      rawUsername === 'rashal117' ||
+      tgUser.username?.toLowerCase() === 'rashal117' ||
+      tgId === '7386892835'
+    );
+
+    const telegramSession: UserSession = {
+      uid: isTgAdmin ? 'admin_rashal117' : uid,
+      username: isTgAdmin ? 'rashal117' : rawUsername,
+      name: isTgAdmin ? 'Farju Admin (RF SMM)' : name,
+      email: isTgAdmin ? 'ihicggh@gmail.com' : email,
+      photoURL: photoURL,
+      telegramId: tgUser.id
+    };
+
+    currentUserSessionLogin(telegramSession);
+    showToast(`⚡ Telegram Auto-Login সফল! Welcome, ${telegramSession.name} 🚀`, 'success');
+    setAuthSubmitting(false);
+  };
+
   const currentUserSessionLogin = (session: UserSession) => {
     localStorage.setItem('smm_session', JSON.stringify(session));
     setCurrentUser(session);
@@ -3751,6 +3893,28 @@ export default function App() {
 
             {authTab === 'login' ? (
               <div>
+                {/* Telegram Mini App Fast Login Button */}
+                {tg?.initDataUnsafe?.user && (
+                  <div className="mb-4">
+                    <button
+                      type="button"
+                      onClick={handleTelegramOneTapLogin}
+                      disabled={authSubmitting}
+                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all border border-sky-300/30"
+                    >
+                      <i className="fab fa-telegram-plane text-base"></i>
+                      <span>⚡ Login as @{tg.initDataUnsafe.user.username || tg.initDataUnsafe.user.first_name} (টেলিগ্রাম অটো লগইন)</span>
+                    </button>
+                    <div className="flex items-center gap-2 my-3">
+                      <div className="h-[1px] flex-1 bg-slate-800" />
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
+                        OR WITH PASSWORD
+                      </span>
+                      <div className="h-[1px] flex-1 bg-slate-800" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-3">
                   <label className="form-label flex items-center justify-between">
                     <span>Username or Gmail / Email</span>
@@ -3806,6 +3970,28 @@ export default function App() {
               </div>
             ) : (
               <div>
+                {/* Telegram Mini App Fast Register Button */}
+                {tg?.initDataUnsafe?.user && (
+                  <div className="mb-4">
+                    <button
+                      type="button"
+                      onClick={handleTelegramOneTapLogin}
+                      disabled={authSubmitting}
+                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all border border-sky-300/30"
+                    >
+                      <i className="fab fa-telegram-plane text-base"></i>
+                      <span>⚡ Instant Sign-Up with Telegram ID (টেলিগ্রাম দিয়ে সরাসরি একাউন্ট)</span>
+                    </button>
+                    <div className="flex items-center gap-2 my-3">
+                      <div className="h-[1px] flex-1 bg-slate-800" />
+                      <span className="text-[10px] uppercase font-bold text-slate-500 font-mono tracking-wider">
+                        OR MANUAL REGISTRATION
+                      </span>
+                      <div className="h-[1px] flex-1 bg-slate-800" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-3">
                   <label className="form-label flex items-center justify-between">
                     <span>Full Name</span>
@@ -6869,6 +7055,19 @@ export default function App() {
                     <div className="flex justify-between items-center py-1 border-b border-white/5">
                       <span className="text-slate-400">Gmail / Email:</span>
                       <span className="font-mono text-slate-200 font-semibold">{currentUser.email}</span>
+                    </div>
+                  )}
+
+                  {(currentUser?.telegramId || tg?.initDataUnsafe?.user?.id) && (
+                    <div className="flex justify-between items-center py-1 border-b border-white/5">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <i className="fab fa-telegram text-sky-400"></i>
+                        <span>Telegram ID:</span>
+                      </span>
+                      <span className="font-mono text-sky-300 font-bold flex items-center gap-1">
+                        <span>{currentUser?.telegramId || tg?.initDataUnsafe?.user?.id}</span>
+                        <i className="fas fa-check-circle text-[10px] text-emerald-400" title="Connected"></i>
+                      </span>
                     </div>
                   )}
 
