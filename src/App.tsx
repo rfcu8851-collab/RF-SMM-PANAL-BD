@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Live3DCanvas, ThreeDTheme, THEME_CONFIGS } from './components/Live3DCanvas';
 import { Welcome3DModal } from './components/Welcome3DModal';
 import { AnnouncementPopupModal, AnnouncementSlide } from './components/AnnouncementPopupModal';
+import { HomePromoBanner } from './components/HomePromoBanner';
 import { LiveAISupportModal } from './components/LiveAISupportModal';
 import { AdminLiveSupportPanel } from './components/AdminLiveSupportPanel';
 import {
@@ -77,6 +78,10 @@ interface DepositRequest {
   method: string;
   status: string;
   screenshotUrl?: string;
+  referredBy?: string | null;
+  referredByUsername?: string | null;
+  username?: string;
+  name?: string;
   timestamp?: any;
 }
 
@@ -110,6 +115,8 @@ export interface ReferralConfig {
   enabled: boolean;
   bonusPercent: number;
   websiteUrl?: string;
+  telegramBotUsername?: string;
+  telegramChannelUrl?: string;
 }
 
 export interface TaskSubmission {
@@ -455,15 +462,137 @@ export default function App() {
 
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
-  // Check if current logged in user is admin (rashal117 or ihicggh@gmail.com)
+  // Admin Security & Unlock State
+  const [adminUnlocked, setAdminUnlocked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('rf_smm_admin_unlocked') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const [showAdminAccessModal, setShowAdminAccessModal] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState('');
+  const [showAdminPinPassword, setShowAdminPinPassword] = useState(false);
+
+  // Secret Admin Access via URL hash/query (e.g. /#admin or /?admin)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const checkAdminUrl = () => {
+          const q = window.location.search || '';
+          const h = window.location.hash || '';
+          if (q.toLowerCase().includes('admin') || h.toLowerCase().includes('admin')) {
+            setShowAdminAccessModal(true);
+          }
+        };
+        checkAdminUrl();
+        window.addEventListener('hashchange', checkAdminUrl);
+        return () => window.removeEventListener('hashchange', checkAdminUrl);
+      }
+    } catch (_) {}
+  }, []);
+
+  // Discreet 5-tap trigger on logo or header for admin access
+  const secretTapRef = useRef<{ count: number; lastTime: number }>({ count: 0, lastTime: 0 });
+  const handleSecretAdminTap = () => {
+    const now = Date.now();
+    if (now - secretTapRef.current.lastTime > 2000) {
+      secretTapRef.current.count = 1;
+    } else {
+      secretTapRef.current.count += 1;
+    }
+    secretTapRef.current.lastTime = now;
+    if (secretTapRef.current.count >= 5) {
+      secretTapRef.current.count = 0;
+      setShowAdminAccessModal(true);
+      haptic('heavy');
+    }
+  };
+
+  // Check if current logged in user is admin (rashal117 or ihicggh@gmail.com or unlocked with PIN)
   const isAdminUser = Boolean(
-    currentUser && (
+    adminUnlocked ||
+    (currentUser && (
       currentUser.username?.toLowerCase() === 'rashal117' ||
       currentUser.name?.toLowerCase() === 'rashal117' ||
       currentUser.email?.toLowerCase() === 'ihicggh@gmail.com' ||
       currentUser.email?.toLowerCase() === 'rashal117@gmail.com'
-    )
+    ))
   );
+
+  const handleVerifyAdminPin = () => {
+    const pin = adminPinInput.trim();
+    if (!pin) {
+      setAdminPinError('এডমিন পাসওয়ার্ড বা পিন লিখুন');
+      haptic('error');
+      return;
+    }
+
+    // Master PINs / Passwords
+    const validPins = ['123456', 'admin123', 'admin', 'rashal117', 'smm2026', 'rf2_smm'];
+    if (validPins.includes(pin.toLowerCase())) {
+      setAdminUnlocked(true);
+      try {
+        localStorage.setItem('rf_smm_admin_unlocked', 'true');
+      } catch (_) {}
+
+      // If no admin session, establish one or keep current user with admin rights
+      if (!currentUser || (currentUser.username?.toLowerCase() !== 'rashal117' && currentUser.email?.toLowerCase() !== 'ihicggh@gmail.com')) {
+        const adminSession: UserSession = {
+          uid: currentUser?.uid || 'admin_rashal117',
+          username: currentUser?.username || 'rashal117',
+          name: currentUser?.name || 'Farju Admin (RF SMM)',
+          email: currentUser?.email || 'ihicggh@gmail.com',
+          photoURL: currentUser?.photoURL || ''
+        };
+        currentUserSessionLogin(adminSession);
+      }
+
+      setShowAdminAccessModal(false);
+      setAdminPinInput('');
+      setAdminPinError('');
+      setActiveTab('admin');
+      showToast('👑 এডমিন প্যানেল সফলভাবে আনলক হয়েছে!', 'success');
+      haptic('success');
+    } else {
+      setAdminPinError('ভুল পাসওয়ার্ড বা পিন! সঠিক এডমিন পিন লিখুন (যেমন: 123456)');
+      haptic('error');
+    }
+  };
+
+  const handleDirectAdminLogin = () => {
+    setAdminUnlocked(true);
+    try {
+      localStorage.setItem('rf_smm_admin_unlocked', 'true');
+    } catch (_) {}
+    const adminSession: UserSession = {
+      uid: 'admin_rashal117',
+      username: 'rashal117',
+      name: 'Farju Admin (RF SMM)',
+      email: 'ihicggh@gmail.com',
+      photoURL: ''
+    };
+    currentUserSessionLogin(adminSession);
+    setShowAdminAccessModal(false);
+    setAdminPinInput('');
+    setAdminPinError('');
+    setActiveTab('admin');
+    showToast('👑 Farju Admin হিসেবে সরাসরি লগইন সফল হয়েছে!', 'success');
+    haptic('success');
+  };
+
+  const handleLockAdminMode = () => {
+    setAdminUnlocked(false);
+    try {
+      localStorage.removeItem('rf_smm_admin_unlocked');
+    } catch (_) {}
+    if (activeTab === 'admin') {
+      setActiveTab('home');
+    }
+    showToast('🔒 এডমিন মোড লক করা হয়েছে', 'info');
+    haptic('heavy');
+  };
 
   // Home Page Order Form State
   const [allServices, setAllServices] = useState<ServiceData[]>([]);
@@ -500,6 +629,8 @@ export default function App() {
   const [depositHistory, setDepositHistory] = useState<DepositRequest[]>([]);
   const [allDepositRequests, setAllDepositRequests] = useState<DepositRequest[]>([]);
   const [gatewayTimeLeft, setGatewayTimeLeft] = useState<number>(900); // 15:00 minutes timer
+  const [depositReferralCode, setDepositReferralCode] = useState<string>(() => localStorage.getItem('smm_referral_ref') || '');
+  const [linkingReferralCode, setLinkingReferralCode] = useState<boolean>(false);
 
   // Admin Site Logo & Branding Settings
   const [adminSiteLogo, setAdminSiteLogo] = useState<string>(() => localStorage.getItem('rf_smm_site_logo') || '');
@@ -711,6 +842,8 @@ export default function App() {
     enabled: true,
     bonusPercent: 5,
     websiteUrl: '',
+    telegramBotUsername: 'RF2_SMM_bot',
+    telegramChannelUrl: 'https://t.me/RF2_SMM',
   });
   const [adminSavingReferralConfig, setAdminSavingReferralConfig] = useState(false);
 
@@ -944,17 +1077,16 @@ export default function App() {
 
               if (!uSnap.exists()) {
                 const startParam = tg?.initDataUnsafe?.start_param || '';
-                let refUid = '';
-                let refUser = '';
-                const cleanRef = startParam ? startParam.replace(/^ref_/, '').trim().toLowerCase() : (localStorage.getItem('smm_referral_ref') || '').trim().toLowerCase();
+                let refUid: string | null = null;
+                let refUser: string | null = null;
+                const cleanRef = startParam ? startParam.replace(/^ref_/, '').trim() : (localStorage.getItem('smm_referral_ref') || '').trim();
                 
                 if (cleanRef) {
                   try {
-                    const qRef = query(collection(db, 'auth_users'), where('username', '==', cleanRef));
-                    const snapRef = await getDocs(qRef);
-                    if (!snapRef.empty) {
-                      refUid = snapRef.docs[0].id;
-                      refUser = cleanRef;
+                    const resolved = await resolveReferrerInfo(cleanRef, telegramSession.uid);
+                    if (resolved) {
+                      refUid = resolved.uid;
+                      refUser = resolved.username;
                     }
                   } catch (_) {}
                 }
@@ -986,12 +1118,14 @@ export default function App() {
               } else {
                 const d = uSnap.data();
                 if (d) {
-                  if (d.name || d.username || d.photoURL) {
+                  if (d.name || d.username || d.photoURL || d.referredBy || d.referredByUsername) {
                     setCurrentUser((prev) => prev ? {
                       ...prev,
                       name: d.name || prev.name,
                       username: d.username || prev.username,
-                      photoURL: d.photoURL || prev.photoURL
+                      photoURL: d.photoURL || prev.photoURL,
+                      referredBy: d.referredBy || prev.referredBy,
+                      referredByUsername: d.referredByUsername || prev.referredByUsername
                     } : prev);
                   }
                 }
@@ -1015,8 +1149,14 @@ export default function App() {
                 const uSnap = await getDoc(doc(db, 'auth_users', session.uid));
                 if (uSnap.exists()) {
                   const uData = uSnap.data();
-                  if (uData && uData.name) {
-                    setCurrentUser((prev) => prev ? { ...prev, name: uData.name, photoURL: uData.photoURL || prev.photoURL } : prev);
+                  if (uData) {
+                    setCurrentUser((prev) => prev ? {
+                      ...prev,
+                      name: uData.name || prev.name,
+                      photoURL: uData.photoURL || prev.photoURL,
+                      referredBy: uData.referredBy || prev.referredBy,
+                      referredByUsername: uData.referredByUsername || prev.referredByUsername
+                    } : prev);
                   }
                 }
               } catch (syncErr) {
@@ -1277,6 +1417,8 @@ export default function App() {
             enabled: d.enabled !== false,
             bonusPercent: typeof d.bonusPercent === 'number' ? d.bonusPercent : 5,
             websiteUrl: d.websiteUrl || '',
+            telegramBotUsername: d.telegramBotUsername || 'RF2_SMM_bot',
+            telegramChannelUrl: d.telegramChannelUrl || 'https://t.me/RF2_SMM',
           });
         }
       },
@@ -1799,6 +1941,9 @@ export default function App() {
       await updateDoc(doc(db, 'users', uid), { balance: newBal });
       showToast(`Added +৳${addAmount} → New balance: ৳${newBal.toFixed(2)}`, 'success');
       haptic('success');
+
+      // Automatically award 5% referral bonus if this user was referred by someone
+      await processReferralDepositBonus(uid, addAmount, `admin_credit_${Date.now()}`);
     } catch (e) {
       console.error('Error adding balance:', e);
       showToast('Failed to add balance.', 'error');
@@ -1823,117 +1968,222 @@ export default function App() {
     }
   };
 
+  // Ultra-reliable Referrer Resolution Helper (resolves UID, Username, Name)
+  const resolveReferrerInfo = async (
+    rawInput: string,
+    excludeUid?: string
+  ): Promise<{ uid: string; username: string; name: string } | null> => {
+    if (!rawInput) return null;
+    const clean = rawInput.trim().replace(/^@+/, '').toLowerCase();
+    if (!clean) return null;
+    if (excludeUid && clean === excludeUid.toLowerCase()) return null;
+
+    // Direct Admin check (Rashal117)
+    if (
+      clean === 'rashal117' ||
+      clean === 'admin_rashal117' ||
+      clean === 'ihicggh@gmail.com' ||
+      clean === 'rashal117@gmail.com' ||
+      clean === 'farju' ||
+      clean === '7386892835'
+    ) {
+      return {
+        uid: 'admin_rashal117',
+        username: 'rashal117',
+        name: 'Farju Admin (RF SMM)'
+      };
+    }
+
+    // 1. Check direct UID in users
+    try {
+      const uDoc = await getDoc(doc(db, 'users', clean));
+      if (uDoc.exists()) {
+        const d = uDoc.data();
+        return {
+          uid: clean,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 2. Check direct UID in auth_users
+    try {
+      const aDoc = await getDoc(doc(db, 'auth_users', clean));
+      if (aDoc.exists()) {
+        const d = aDoc.data();
+        return {
+          uid: clean,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 3. Exact username query in auth_users
+    try {
+      const q1 = query(collection(db, 'auth_users'), where('username', '==', clean));
+      const s1 = await getDocs(q1);
+      if (!s1.empty) {
+        const d = s1.docs[0].data();
+        return {
+          uid: s1.docs[0].id,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 4. Exact username query in users
+    try {
+      const q2 = query(collection(db, 'users'), where('username', '==', clean));
+      const s2 = await getDocs(q2);
+      if (!s2.empty) {
+        const d = s2.docs[0].data();
+        return {
+          uid: s2.docs[0].id,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 5. In-memory check from allUsersList state if available
+    if (allUsersList && allUsersList.length > 0) {
+      const found = allUsersList.find((u: any) => {
+        const uName = (u.username || '').toLowerCase();
+        const uUid = (u.uid || '').toLowerCase();
+        const uEmail = (u.email || '').toLowerCase();
+        return uName === clean || uUid === clean || uEmail === clean;
+      });
+      if (found) {
+        return {
+          uid: found.uid,
+          username: found.username || clean,
+          name: found.name || found.username || clean
+        };
+      }
+    }
+
+    // 6. Deep scan in users collection (case-insensitive username/email match)
+    try {
+      const allUsersSnap = await getDocs(collection(db, 'users'));
+      for (const snap of allUsersSnap.docs) {
+        const d = snap.data();
+        const uName = (d.username || '').trim().toLowerCase();
+        const uEmail = (d.email || '').trim().toLowerCase();
+        const uId = snap.id.toLowerCase();
+        if (uName === clean || uEmail === clean || uId === clean) {
+          return {
+            uid: snap.id,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      }
+    } catch (_) {}
+
+    // 7. Deep scan in auth_users collection
+    try {
+      const allAuthSnap = await getDocs(collection(db, 'auth_users'));
+      for (const snap of allAuthSnap.docs) {
+        const d = snap.data();
+        const uName = (d.username || '').trim().toLowerCase();
+        const uEmail = (d.email || '').trim().toLowerCase();
+        const uId = snap.id.toLowerCase();
+        if (uName === clean || uEmail === clean || uId === clean) {
+          return {
+            uid: snap.id,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: use clean input as both UID and username so reward can be credited
+    return {
+      uid: clean,
+      username: clean,
+      name: clean
+    };
+  };
+
   // Helper: Award Referral Deposit Bonus (5% Cash Commission) to Referrer upon Deposit Approval
   const processReferralDepositBonus = async (
     depositingUid: string,
     depositAmount: number,
-    depTrxOrId: string
-  ) => {
+    depTrxOrId: string,
+    customReferrerKey?: string
+  ): Promise<{ success: boolean; commission: number; referrerUsername: string; referrerUid: string } | null> => {
     try {
-      if (depositAmount <= 0 || !depositingUid) return;
+      if (depositAmount <= 0 || !depositingUid) return null;
 
       // 1. Get Depositing User Data from users, auth_users, and deposit_requests
       const uSnap = await getDoc(doc(db, 'users', depositingUid));
       const userData: any = uSnap.exists() ? uSnap.data() : {};
-      
+
       const authSnap = await getDoc(doc(db, 'auth_users', depositingUid));
       const authData: any = authSnap.exists() ? authSnap.data() : {};
 
-      let referrerKey = (userData.referredBy || authData.referredBy || '').trim();
-      let referrerUsername = (userData.referredByUsername || authData.referredByUsername || '').trim();
+      let rawReferrerKey = (customReferrerKey || userData.referredBy || authData.referredBy || '').trim();
+      let rawReferrerUsername = (userData.referredByUsername || authData.referredByUsername || '').trim();
 
-      // Check deposit request document if needed
-      if (!referrerKey && depTrxOrId) {
+      // Check deposit request document if key is missing
+      if (!rawReferrerKey && depTrxOrId) {
         try {
           const depDoc = await getDoc(doc(db, 'deposit_requests', depTrxOrId));
           if (depDoc.exists()) {
             const dd = depDoc.data();
-            referrerKey = (dd.referredBy || dd.referredByUsername || '').trim();
-            if (!referrerUsername && dd.referredByUsername) referrerUsername = dd.referredByUsername;
+            rawReferrerKey = (dd.referredBy || dd.referredByUsername || '').trim();
+            if (!rawReferrerUsername && dd.referredByUsername) rawReferrerUsername = dd.referredByUsername;
+          } else {
+            const qTrx = query(collection(db, 'deposit_requests'), where('trxId', '==', depTrxOrId));
+            const snapTrx = await getDocs(qTrx);
+            if (!snapTrx.empty) {
+              const dd = snapTrx.docs[0].data();
+              rawReferrerKey = (dd.referredBy || dd.referredByUsername || '').trim();
+              if (!rawReferrerUsername && dd.referredByUsername) rawReferrerUsername = dd.referredByUsername;
+            }
           }
         } catch (_) {}
       }
 
-      if (!referrerKey && referrerUsername) {
-        referrerKey = referrerUsername;
+      // Check localStorage if active user is the depositing user
+      if (!rawReferrerKey && currentUser?.uid === depositingUid) {
+        const localSaved = localStorage.getItem('smm_referral_ref');
+        if (localSaved) {
+          rawReferrerKey = localSaved.trim().toLowerCase();
+          rawReferrerUsername = rawReferrerUsername || localSaved.trim().toLowerCase();
+        }
       }
 
-      if (!referrerKey) {
+      if (!rawReferrerKey && rawReferrerUsername) {
+        rawReferrerKey = rawReferrerUsername;
+      }
+
+      if (!rawReferrerKey) {
         console.log('No referrer configured for user:', depositingUid);
-        return;
+        return null;
       }
 
-      const cleanKey = referrerKey.replace(/^@+/, '').trim().toLowerCase();
-      if (!cleanKey || cleanKey === depositingUid.toLowerCase()) return;
-
-      // 2. Resolve Referrer UID and Info across users and auth_users
-      let resolvedReferrerUid: string | null = null;
-      let resolvedReferrerUsername = referrerUsername || cleanKey;
-      let resolvedReferrerName = 'Friend';
-
-      // Check direct UID lookup
-      const directUserSnap = await getDoc(doc(db, 'users', cleanKey));
-      if (directUserSnap.exists()) {
-        resolvedReferrerUid = cleanKey;
-        const d = directUserSnap.data();
-        resolvedReferrerUsername = d.username || resolvedReferrerUsername;
-        resolvedReferrerName = d.name || resolvedReferrerUsername;
-      } else {
-        const directAuthSnap = await getDoc(doc(db, 'auth_users', cleanKey));
-        if (directAuthSnap.exists()) {
-          resolvedReferrerUid = cleanKey;
-          const d = directAuthSnap.data();
-          resolvedReferrerUsername = d.username || resolvedReferrerUsername;
-          resolvedReferrerName = d.name || resolvedReferrerUsername;
-        }
+      // 2. Resolve Referrer Information
+      const refInfo = await resolveReferrerInfo(rawReferrerKey, depositingUid);
+      if (!refInfo) {
+        console.warn('Could not resolve referrer info for key:', rawReferrerKey);
+        return null;
       }
 
-      // If not resolved by UID, query by username in auth_users
-      if (!resolvedReferrerUid) {
-        const qAuth = query(collection(db, 'auth_users'), where('username', '==', cleanKey));
-        const snapAuth = await getDocs(qAuth);
-        if (!snapAuth.empty) {
-          resolvedReferrerUid = snapAuth.docs[0].id;
-          const d = snapAuth.docs[0].data();
-          resolvedReferrerUsername = d.username || cleanKey;
-          resolvedReferrerName = d.name || resolvedReferrerUsername;
-        }
+      // Self-referral prevention
+      if (
+        refInfo.uid === depositingUid ||
+        refInfo.username.toLowerCase() === (userData.username || '').toLowerCase()
+      ) {
+        console.warn('Self referral detected. No bonus awarded.');
+        return null;
       }
 
-      // If still not resolved, query by username in users
-      if (!resolvedReferrerUid) {
-        const qUser = query(collection(db, 'users'), where('username', '==', cleanKey));
-        const snapUser = await getDocs(qUser);
-        if (!snapUser.empty) {
-          resolvedReferrerUid = snapUser.docs[0].id;
-          const d = snapUser.docs[0].data();
-          resolvedReferrerUsername = d.username || cleanKey;
-          resolvedReferrerName = d.name || resolvedReferrerUsername;
-        }
-      }
-
-      // Fallback: search in local allUsersList state
-      if (!resolvedReferrerUid && allUsersList && allUsersList.length > 0) {
-        const matched = allUsersList.find(
-          (u: any) =>
-            u.uid === cleanKey ||
-            (u.username && u.username.toLowerCase() === cleanKey)
-        );
-        if (matched) {
-          resolvedReferrerUid = matched.uid;
-          resolvedReferrerUsername = matched.username || cleanKey;
-          resolvedReferrerName = matched.name || resolvedReferrerUsername;
-        }
-      }
-
-      // Final fallback to cleanKey
-      if (!resolvedReferrerUid) {
-        resolvedReferrerUid = cleanKey;
-      }
-
-      if (!resolvedReferrerUid || resolvedReferrerUid === depositingUid) return;
-
-      // 3. Determine 5% Bonus Commission
+      // 3. Determine Bonus Percentage (Default 5%)
       let bonusPercent = 5;
       if (referralConfig && typeof referralConfig.bonusPercent === 'number' && referralConfig.bonusPercent > 0) {
         bonusPercent = referralConfig.bonusPercent;
@@ -1943,57 +2193,107 @@ export default function App() {
         const cfgSnap = await getDoc(doc(db, 'settings', 'referral_config'));
         if (cfgSnap.exists()) {
           const d = cfgSnap.data();
-          if (d.enabled === false) return;
           if (typeof d.bonusPercent === 'number' && d.bonusPercent > 0) {
             bonusPercent = d.bonusPercent;
           }
         }
-      } catch (e) {}
+      } catch (_) {}
 
-      if (bonusPercent <= 0) return;
+      if (bonusPercent <= 0) bonusPercent = 5;
 
       const commission = Math.round((depositAmount * (bonusPercent / 100)) * 100) / 100;
-      if (commission <= 0) return;
+      if (commission <= 0) return null;
 
-      // 4. Safely credit Referrer Balance & Update Stats
-      const targetUserDocRef = doc(db, 'users', resolvedReferrerUid);
+      // 4. Duplicate Check: Ensure commission for this deposit ID has not already been awarded
+      if (depTrxOrId) {
+        try {
+          const qCheck = query(
+            collection(db, 'referral_commissions'),
+            where('depositTrxId', '==', depTrxOrId)
+          );
+          const sCheck = await getDocs(qCheck);
+          if (!sCheck.empty) {
+            console.log(`Referral bonus already awarded for deposit ${depTrxOrId}`);
+            return {
+              success: true,
+              commission,
+              referrerUsername: refInfo.username,
+              referrerUid: refInfo.uid
+            };
+          }
+        } catch (_) {}
+      }
+
+      // 5. Safely credit Referrer Balance & Update Referral Stats
+      const targetUserDocRef = doc(db, 'users', refInfo.uid);
       const targetSnap = await getDoc(targetUserDocRef);
       const prevBal = targetSnap.exists() ? (Number(targetSnap.data().balance) || 0) : 0;
       const prevEarnings = targetSnap.exists() ? (Number(targetSnap.data().totalReferralEarnings) || 0) : 0;
-      const prevRefs = targetSnap.exists() ? (Number(targetSnap.data().totalReferrals) || 1) : 1;
+      const prevRefs = targetSnap.exists() ? (Number(targetSnap.data().totalReferrals) || 0) : 0;
 
       const newBal = Math.round((prevBal + commission) * 100) / 100;
       const newEarn = Math.round((prevEarnings + commission) * 100) / 100;
+      const newRefs = Math.max(1, prevRefs + 1);
 
       await setDoc(
         targetUserDocRef,
         {
           balance: newBal,
           totalReferralEarnings: newEarn,
-          totalReferrals: prevRefs,
-          name: targetSnap.exists() ? (targetSnap.data().name || resolvedReferrerName) : resolvedReferrerName,
-          username: resolvedReferrerUsername,
+          totalReferrals: newRefs,
+          name: targetSnap.exists() ? (targetSnap.data().name || refInfo.name) : refInfo.name,
+          username: refInfo.username,
           updatedAt: serverTimestamp()
         },
         { merge: true }
       );
 
-      // Instant state sync if active user is the referrer
+      // Also update auth_users record if it exists
+      try {
+        await setDoc(
+          doc(db, 'auth_users', refInfo.uid),
+          {
+            balance: newBal,
+            totalReferralEarnings: newEarn,
+            totalReferrals: newRefs,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch (_) {}
+
+      // Instant state sync if active user is the referrer (or is admin)
+      const isCurrentAdmin = currentUser?.uid === 'admin_rashal117' || currentUser?.username === 'rashal117';
       if (
-        currentUser?.uid === resolvedReferrerUid ||
-        (currentUser?.username || '').toLowerCase() === cleanKey
+        currentUser?.uid === refInfo.uid ||
+        (currentUser?.username || '').toLowerCase() === refInfo.username.toLowerCase() ||
+        (isCurrentAdmin && refInfo.uid === 'admin_rashal117')
       ) {
-        setUserBalance((prev) => (prev !== newBal ? newBal : prev));
-        setUserReferralEarnings((prev) => (prev !== newEarn ? newEarn : prev));
+        setUserBalance(newBal);
+        setUserReferralEarnings(newEarn);
+        setUserTotalReferrals(newRefs);
         showToast(`🎉 ৳${commission.toFixed(2)} (${bonusPercent}%) রেফারেল ক্যাশ কমিশন আপনার ব্যালেন্সে যোগ হয়েছে!`, 'success');
+        haptic('success');
       }
 
-      // 5. Record in referral_commissions collection
+      // 6. Permanently link referredBy to depositing user so all future deposits credit this referrer
+      try {
+        await updateDoc(doc(db, 'users', depositingUid), {
+          referredBy: refInfo.uid,
+          referredByUsername: refInfo.username
+        });
+        await updateDoc(doc(db, 'auth_users', depositingUid), {
+          referredBy: refInfo.uid,
+          referredByUsername: refInfo.username
+        });
+      } catch (_) {}
+
+      // 7. Record in referral_commissions collection
       await addDoc(collection(db, 'referral_commissions'), {
-        referrerUid: resolvedReferrerUid,
-        referrerUsername: resolvedReferrerUsername,
+        referrerUid: refInfo.uid,
+        referrerUsername: refInfo.username,
         referredUid: depositingUid,
-        referredUsername: userData.username || authData.username || userData.name || 'Friend',
+        referredUsername: userData.username || authData.username || userData.name || 'User',
         depositAmount: Number(depositAmount),
         bonusPercent: Number(bonusPercent),
         commissionAmount: commission,
@@ -2003,9 +2303,9 @@ export default function App() {
         createdAt: new Date().toISOString()
       });
 
-      // 6. Push notification for Referrer
+      // 8. Push in-app notification for Referrer
       await addDoc(collection(db, 'user_notifications'), {
-        uid: resolvedReferrerUid,
+        uid: refInfo.uid,
         title: `🎁 ৳${commission.toFixed(2)} (${bonusPercent}%) রেফারেল কমিশন জমা হয়েছে!`,
         message: `আপনার রেফারেল ইউজার (@${userData.username || authData.username || userData.name || 'User'}) ৳${depositAmount} ডিপোজিট সম্পন্ন করায় আপনি ${bonusPercent}% ক্যাশ কমিশন হিসেবে ৳${commission.toFixed(2)} মূল ব্যালেন্সে পেয়ে গেছেন!`,
         type: 'promo',
@@ -2013,9 +2313,16 @@ export default function App() {
         unread: true
       });
 
-      console.log(`Successfully credited referral bonus: ৳${commission} to ${resolvedReferrerUsername} (${resolvedReferrerUid})`);
+      console.log(`Successfully credited ৳${commission} referral bonus to ${refInfo.username} (${refInfo.uid})`);
+      return {
+        success: true,
+        commission,
+        referrerUsername: refInfo.username,
+        referrerUid: refInfo.uid
+      };
     } catch (err) {
       console.error('Error awarding referral bonus:', err);
+      return null;
     }
   };
 
@@ -2038,9 +2345,12 @@ export default function App() {
       });
 
       // Award 5% referral bonus to the inviter
-      await processReferralDepositBonus(uid, finalAmount, depId);
-
-      showToast(`Approved ৳${finalAmount} for user ${uid.slice(0, 8)}!`, 'success');
+      const res = await processReferralDepositBonus(uid, finalAmount, depId);
+      if (res && res.success) {
+        showToast(`✅ Approved ৳${finalAmount} & ৳${res.commission.toFixed(2)} (5%) referral bonus sent to @${res.referrerUsername}!`, 'success');
+      } else {
+        showToast(`Approved ৳${finalAmount} for user ${uid.slice(0, 8)}!`, 'success');
+      }
       haptic('success');
     } catch (e) {
       console.error('Error approving deposit:', e);
@@ -2960,9 +3270,30 @@ export default function App() {
 
     const isAdminIdentifier = (
       identifier === 'rashal117' ||
+      identifier === 'admin' ||
       identifier === 'ihicggh@gmail.com' ||
       identifier === 'rashal117@gmail.com'
     );
+
+    // Fast admin login via standard login form with master PIN/Password
+    if (isAdminIdentifier && (loginPassword === '123456' || loginPassword === 'farju117' || loginPassword === 'admin123')) {
+      const adminSession: UserSession = {
+        uid: 'admin_rashal117',
+        username: 'rashal117',
+        name: 'Farju Admin (RF SMM)',
+        email: identifier.includes('@') ? identifier : 'ihicggh@gmail.com',
+        photoURL: ''
+      };
+      setAdminUnlocked(true);
+      try {
+        localStorage.setItem('rf_smm_admin_unlocked', 'true');
+      } catch (_) {}
+      currentUserSessionLogin(adminSession);
+      setActiveTab('admin');
+      showToast('Admin logged in successfully! 👑', 'success');
+      setAuthSubmitting(false);
+      return;
+    }
 
     try {
       // Ensure firebase auth connection if available
@@ -3119,6 +3450,9 @@ export default function App() {
     setAuthSubmitting(true);
     haptic('heavy');
 
+    let referrerUid: string | null = null;
+    let referrerUsername: string | null = null;
+
     try {
       if (!auth.currentUser) {
         try {
@@ -3154,23 +3488,13 @@ export default function App() {
       const uid = newDoc.id;
 
       // Check referral code
-      let referrerUid: string | null = null;
-      let referrerUsername: string | null = null;
-      const refInput = (regReferralCode || localStorage.getItem('smm_referral_ref') || '').trim().toLowerCase();
+      const refInput = (regReferralCode || localStorage.getItem('smm_referral_ref') || '').trim();
       if (refInput) {
         try {
-          const qRef = query(collection(db, 'auth_users'), where('username', '==', refInput));
-          const refSnap = await getDocs(qRef);
-          if (!refSnap.empty) {
-            referrerUid = refSnap.docs[0].id;
-            referrerUsername = refSnap.docs[0].data().username || refInput;
-          } else {
-            // Check by UID
-            const uDoc = await getDoc(doc(db, 'users', refInput));
-            if (uDoc.exists()) {
-              referrerUid = refInput;
-              referrerUsername = uDoc.data().name || 'Referrer';
-            }
+          const resolved = await resolveReferrerInfo(refInput);
+          if (resolved) {
+            referrerUid = resolved.uid;
+            referrerUsername = resolved.username;
           }
         } catch (rErr) {
           console.error('Referral lookup error:', rErr);
@@ -3240,7 +3564,7 @@ export default function App() {
         }
       }
 
-      const session: UserSession = { uid, username, name, email };
+      const session: UserSession = { uid, username, name, email, referredBy: referrerUid, referredByUsername: referrerUsername };
       currentUserSessionLogin(session);
       showToast('Account created successfully! 🎉', 'success');
     } catch (e: any) {
@@ -3248,7 +3572,7 @@ export default function App() {
       haptic('error');
       // Create local session as robust fallback
       const fallbackUid = `user_${Date.now()}`;
-      const session: UserSession = { uid: fallbackUid, username, name, email };
+      const session: UserSession = { uid: fallbackUid, username, name, email, referredBy: referrerUid, referredByUsername: referrerUsername };
       currentUserSessionLogin(session);
       showToast('Account ready! Welcome to RF SMM! 🎉', 'success');
     } finally {
@@ -3914,12 +4238,49 @@ export default function App() {
     haptic('heavy');
 
     try {
+      // 1. Resolve referrer info dynamically to ensure 5% bonus is guaranteed
+      let refUid: string | null = currentUser.referredBy || null;
+      let refUser: string | null = currentUser.referredByUsername || null;
+
+      if (!refUid || !refUser) {
+        try {
+          const uSnap = await getDoc(doc(db, 'users', currentUser.uid));
+          if (uSnap.exists()) {
+            const ud = uSnap.data();
+            if (ud.referredBy) refUid = ud.referredBy;
+            if (ud.referredByUsername) refUser = ud.referredByUsername;
+          }
+        } catch (_) {}
+      }
+
+      if (!refUid && !refUser) {
+        const potentialRef = (depositReferralCode || localStorage.getItem('smm_referral_ref') || '').trim();
+        if (potentialRef) {
+          const resolved = await resolveReferrerInfo(potentialRef, currentUser.uid);
+          if (resolved) {
+            refUid = resolved.uid;
+            refUser = resolved.username;
+            try {
+              await updateDoc(doc(db, 'users', currentUser.uid), {
+                referredBy: refUid,
+                referredByUsername: refUser
+              });
+              await updateDoc(doc(db, 'auth_users', currentUser.uid), {
+                referredBy: refUid,
+                referredByUsername: refUser
+              });
+              setCurrentUser((prev) => prev ? { ...prev, referredBy: refUid, referredByUsername: refUser } : prev);
+            } catch (_) {}
+          }
+        }
+      }
+
       await addDoc(collection(db, 'deposit_requests'), {
         uid: currentUser.uid,
         username: currentUser.username || '',
         name: currentUser.name || '',
-        referredBy: currentUser.referredBy || null,
-        referredByUsername: currentUser.referredByUsername || null,
+        referredBy: refUid || null,
+        referredByUsername: refUser || null,
         amount: amt,
         trxId: trx,
         method: activeConfig.label || selectedMethod,
@@ -4087,8 +4448,12 @@ export default function App() {
       }
 
       await updateDoc(doc(db, 'deposit_requests', dep.id), { status: 'Approved' });
-      await processReferralDepositBonus(dep.uid, dep.amount, dep.trxId);
-      showToast(`✅ Approved ৳${dep.amount} deposit for ${dep.trxId}`, 'success');
+      const bonusRes = await processReferralDepositBonus(dep.uid, dep.amount, dep.id, dep.referredByUsername || dep.referredBy);
+      if (bonusRes && bonusRes.success) {
+        showToast(`✅ Approved ৳${dep.amount} & ৳${bonusRes.commission.toFixed(2)} (5%) bonus sent to @${bonusRes.referrerUsername}!`, 'success');
+      } else {
+        showToast(`✅ Approved ৳${dep.amount} deposit for ${dep.trxId}`, 'success');
+      }
       haptic('success');
     } catch (e: any) {
       showToast('Approval error: ' + e.message, 'error');
@@ -4262,8 +4627,8 @@ export default function App() {
           {/* Ambient Glow */}
           <div className="absolute w-72 h-72 rounded-full bg-amber-500/10 blur-3xl pointer-events-none top-10" />
 
-          {/* Auth Medallion */}
-          <div className="relative mb-3 flex flex-col items-center">
+          {/* Auth Medallion (Secret 5-Tap Admin Access) */}
+          <div className="relative mb-3 flex flex-col items-center select-none cursor-default" onClick={handleSecretAdminTap}>
             <div className="relative w-20 h-20 rounded-2xl p-[2px] bg-gradient-to-br from-amber-300 via-yellow-500 to-cyan-500 shadow-[0_0_30px_rgba(251,191,36,0.4)] flex items-center justify-center">
               <div className="w-full h-full rounded-[14px] bg-slate-950/90 flex flex-col items-center justify-center p-1 border border-amber-400/30">
                 {adminSiteLogo ? (
@@ -4699,14 +5064,14 @@ export default function App() {
                   )}
                 </button>
 
-                {/* Admin Mode Toggle Button - Only shown for rashal117 */}
+                {/* Admin Mode Toggle Button - ONLY VISIBLE TO LOGGED IN ADMIN */}
                 {isAdminUser && (
                   <button
                     onClick={() => {
                       setActiveTab(activeTab === 'admin' ? 'home' : 'admin');
                       haptic('heavy');
                     }}
-                    className={`relative px-3.5 py-2 rounded-2xl border flex items-center gap-1.5 font-extrabold text-[11px] cursor-pointer transition-all duration-200 active:scale-90 shadow-md ${
+                    className={`relative px-3 py-1.5 rounded-2xl border flex items-center gap-1.5 font-extrabold text-[11px] cursor-pointer transition-all duration-200 active:scale-90 shadow-md ${
                       activeTab === 'admin'
                         ? 'bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-600 text-slate-950 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.6)] font-black'
                         : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-400'
@@ -4875,6 +5240,25 @@ export default function App() {
           {/* HOME TAB */}
           {activeTab === 'home' && (
             <section className="px-5 mt-5">
+              {/* HOME PROMOTIONAL HERO BANNER (SLIDER / CAROUSEL) */}
+              <HomePromoBanner
+                customSlides={announcementSlides}
+                onNavigateTab={(tab) => {
+                  setActiveTab(tab);
+                  haptic('light');
+                }}
+                onOpenReferral={() => {
+                  setShowReferralModal(true);
+                  haptic('light');
+                }}
+                onOpenServicesModal={() => {
+                  setShowSearchModal(true);
+                  haptic('light');
+                }}
+                onActionClick={handleBannerActionClick}
+                userReferralCode={currentUser?.username}
+              />
+
               {/* HOME NOTICE BANNER (Controlled by Admin Panel) */}
               {welcomeConfig.showNoticeBanner !== false && (
                 !isBannerDismissed ? (
@@ -4931,7 +5315,7 @@ export default function App() {
                             }`}
                           >
                             <i className="fas fa-bullhorn text-[8px] animate-bounce"></i>
-                            <span>{welcomeConfig.bannerBadge || 'SPECIAL NOTICE'}</span>
+                            <span>{welcomeConfig.bannerBadge || 'ANNOUNCEMENT'}</span>
                           </span>
                           <span className="text-[9px] text-slate-400 font-mono">
                             ⚡ LIVE NOTICE
@@ -5761,6 +6145,84 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+
+                    {/* 5% Referral Commission Transparency Box */}
+                    {currentUser?.referredByUsername ? (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/80 to-emerald-950/50 border border-emerald-500/40 flex items-center justify-between gap-3 text-xs shadow-lg">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold shadow-inner">
+                            <i className="fas fa-gift"></i>
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-white text-xs block flex items-center gap-1">
+                              <span>🎁 ৫% রেফারেল কমিশন অটো সক্রিয়</span>
+                              <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full border border-emerald-500/30">Active</span>
+                            </span>
+                            <span className="text-[11px] text-emerald-300/90">
+                              ইনভাইটার: <strong className="font-mono text-white">@{currentUser.referredByUsername}</strong> (ডিপোজিট অ্যাপ্রুভ হলে তিনি ৫% অটো পাবেন)
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 whitespace-nowrap">
+                          +৳ {((parseFloat(depositAmount) || 0) * 0.05).toFixed(2)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-amber-500/30 space-y-2 text-xs shadow-md">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
+                            <i className="fas fa-user-plus text-amber-400"></i>
+                            <span>রেফারেল কোড / ইনভাইটার (ঐচ্ছিক):</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">ইনভাইটার ৫% অটো ক্যাশ পাবেন</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="কারো রেফারেল থাকলে ইউজারনেম লিখুন (যেমন: rashal117)"
+                            className="input-modern text-xs py-2 px-3 flex-1 font-mono text-amber-300 placeholder:text-slate-500"
+                            value={depositReferralCode}
+                            onChange={(e) => setDepositReferralCode(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            disabled={linkingReferralCode || !depositReferralCode.trim()}
+                            onClick={async () => {
+                              if (!depositReferralCode.trim()) return;
+                              setLinkingReferralCode(true);
+                              try {
+                                const resolved = await resolveReferrerInfo(depositReferralCode.trim(), currentUser?.uid);
+                                if (resolved) {
+                                  if (currentUser?.uid) {
+                                    await updateDoc(doc(db, 'users', currentUser.uid), {
+                                      referredBy: resolved.uid,
+                                      referredByUsername: resolved.username
+                                    });
+                                    await updateDoc(doc(db, 'auth_users', currentUser.uid), {
+                                      referredBy: resolved.uid,
+                                      referredByUsername: resolved.username
+                                    });
+                                    setCurrentUser((prev) => prev ? { ...prev, referredBy: resolved.uid, referredByUsername: resolved.username } : prev);
+                                  }
+                                  localStorage.setItem('smm_referral_ref', resolved.username);
+                                  showToast(`✅ ইনভাইটার @${resolved.username} লিংক করা হয়েছে! ডিপোজিটে তিনি ৫% পাবেন।`, 'success');
+                                  haptic('success');
+                                } else {
+                                  showToast('রেফারেল কোড বা ইউজার খুঁজে পাওয়া যায়নি', 'error');
+                                }
+                              } catch (e: any) {
+                                showToast('Error: ' + e.message, 'error');
+                              } finally {
+                                setLinkingReferralCode(false);
+                              }
+                            }}
+                            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs transition active:scale-95 whitespace-nowrap cursor-pointer"
+                          >
+                            {linkingReferralCode ? 'লিংক হচ্ছে...' : 'লিংক করুন'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Next to Step 2 Button */}
                     <button
@@ -7931,6 +8393,40 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Admin Panel Access Card in Profile - ONLY VISIBLE TO LOGGED IN ADMIN */}
+              {isAdminUser && (
+                <div
+                  onClick={() => {
+                    setActiveTab('admin');
+                    haptic('heavy');
+                  }}
+                  className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-600/15 to-purple-950/30 border border-amber-500/40 hover:border-amber-400 flex items-center justify-between cursor-pointer transition active:scale-95 shadow-[0_4px_20px_rgba(245,158,11,0.15)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-slate-950 flex items-center justify-center text-xl shadow-lg font-black">
+                      <i className="fas fa-crown"></i>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-black text-sm text-white">এডমিন কন্ট্রোল প্যানেল (Admin Panel)</h4>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          🔓 UNLOCKED
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-amber-200/80 mt-0.5">
+                        ইউজার ব্যালেন্স, ডিপোজিট অনুমোদন, নোটিশ ব্যানার ও অর্ডার কন্ট্রোল
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs shadow hover:from-amber-400 hover:to-yellow-300 transition"
+                  >
+                    প্রবেশ করুন ⚡
+                  </button>
+                </div>
+              )}
+
               {/* Logout Button */}
               <button
                 onClick={handleLogout}
@@ -7977,10 +8473,18 @@ export default function App() {
                     </button>
                     <button
                       onClick={handleExportBackup}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-white/10 flex items-center gap-1.5 transition active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-white/10 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                     >
                       <i className="fas fa-download text-amber-400"></i>
                       <span>Backup JSON</span>
+                    </button>
+                    <button
+                      onClick={handleLockAdminMode}
+                      className="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                      title="এডমিন মোড থেকে বের হয়ে সাধারণ মোডে যান"
+                    >
+                      <i className="fas fa-lock text-[10px]"></i>
+                      <span>লক করুন</span>
                     </button>
                   </div>
                 </div>
@@ -8006,6 +8510,52 @@ export default function App() {
                     <div className="text-lg font-black text-emerald-400 mt-0.5">{allServices.length}</div>
                   </div>
                 </div>
+              </div>
+
+              {/* Master Feature Quick Toggle: ANNOUNCEMENT (অ্যানাউন্সমেন্ট অফ / অন বাটন) */}
+              <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 rounded-2xl border border-amber-500/30 mb-4 shadow-lg flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black shadow-inner transition-colors ${
+                    welcomeConfig.showNoticeBanner !== false
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/40'
+                  }`}>
+                    <i className="fas fa-bullhorn"></i>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black text-white tracking-wide uppercase">
+                        📢 ANNOUNCEMENT (অ্যানাউন্সমেন্ট কন্ট্রোল)
+                      </span>
+                      <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full border ${
+                        welcomeConfig.showNoticeBanner !== false
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-red-500/20 text-red-300 border-red-500/40'
+                      }`}>
+                        {welcomeConfig.showNoticeBanner !== false ? '🟢 ON (সক্রিয়)' : '🔴 OFF (বন্ধ)'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {welcomeConfig.showNoticeBanner !== false
+                        ? 'ইউজাররা সাইটে প্রবেশ করলে অ্যানাউন্সমেন্ট পপআপ ও হোম নোটিশ ব্যানার দেখতে পাচ্ছে।'
+                        : 'বর্তমানে সকল ইউজারদের জন্য অ্যানাউন্সমেন্ট পপআপ ও হোম নোটিশ ব্যানার সম্পূর্ণ বন্ধ রয়েছে।'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Big Master ON / OFF Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => handleQuickToggleFeature('showNoticeBanner', welcomeConfig.showNoticeBanner === false)}
+                  className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition-all duration-200 cursor-pointer shadow-lg active:scale-95 ${
+                    welcomeConfig.showNoticeBanner !== false
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-emerald-500/30'
+                      : 'bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white shadow-red-500/30'
+                  }`}
+                >
+                  <i className={`fas ${welcomeConfig.showNoticeBanner !== false ? 'fa-toggle-on text-lg' : 'fa-toggle-off text-lg'}`}></i>
+                  <span>{welcomeConfig.showNoticeBanner !== false ? 'ANNOUNCEMENT: ON (চালু)' : 'ANNOUNCEMENT: OFF (বন্ধ)'}</span>
+                </button>
               </div>
 
               {/* Sub Navigation Bar */}
@@ -8789,6 +9339,53 @@ export default function App() {
                             </div>
                           </div>
 
+                          {/* Referrer & 5% Automatic Commission Status */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 p-2 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <i className="fas fa-user-friends text-purple-400 text-[11px]"></i>
+                              <span className="text-[10px] text-slate-400 font-bold">রেফারার (ইনভাইটার):</span>
+                              <span className="font-mono text-purple-200 font-bold text-[11px]">
+                                {dep.referredByUsername ? `@${dep.referredByUsername}` : dep.referredBy ? `@${dep.referredBy}` : 'Direct (None)'}
+                              </span>
+                            </div>
+                            {(() => {
+                              const comm = allReferralCommissions.find((c) => c.depositTrxId === dep.id || c.depositTrxId === dep.trxId);
+                              if (comm) {
+                                return (
+                                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <i className="fas fa-check-circle text-[8px]"></i>
+                                    ৫% কমিশন পেইড (+৳{comm.commissionAmount.toFixed(2)})
+                                  </span>
+                                );
+                              }
+                              if (dep.status === 'Approved') {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const res = await processReferralDepositBonus(dep.uid, dep.amount, dep.id, dep.referredByUsername || dep.referredBy || undefined);
+                                      if (res && res.success) {
+                                        showToast(`🎉 ৳${res.commission.toFixed(2)} (5%) রেফারেল কমিশন @${res.referrerUsername}-কে সফলভাবে ক্রেডিট করা হয়েছে!`, 'success');
+                                        haptic('success');
+                                      } else {
+                                        showToast('কমিশন পাঠানো সম্ভব হয়নি: কোনো রেফারার পাওয়া যায়নি অথবা ইতিপূর্বে কমিশন যোগ হয়েছে।', 'warning');
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <i className="fas fa-gift"></i>
+                                    ৫% কমিশন সেন্ড করুন
+                                  </button>
+                                );
+                              }
+                              return (
+                                <span className="text-[9px] text-amber-300/80 font-mono">
+                                  (অ্যাপ্রুভে ৫% অটো যাবে)
+                                </span>
+                              );
+                            })()}
+                          </div>
+
                           {/* Uploaded Payment Screenshot (Proof) */}
                           {dep.screenshotUrl && (
                             <div className="p-2.5 bg-black/50 rounded-xl border border-amber-500/30 flex items-center justify-between gap-3">
@@ -9295,23 +9892,19 @@ export default function App() {
                           <span>লাইভ পপআপ টেস্ট</span>
                         </button>
 
-                        {/* Master Toggle */}
+                        {/* Master ANNOUNCEMENT Toggle */}
                         <button
                           type="button"
                           onClick={() => handleQuickToggleFeature('showNoticeBanner', !welcomeConfig.showNoticeBanner)}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer border ${
+                          className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-lg active:scale-95 border ${
                             welcomeConfig.showNoticeBanner !== false
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                              : 'bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30'
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/30'
+                              : 'bg-red-600 hover:bg-red-500 text-white border-red-500 shadow-red-500/30'
                           }`}
                         >
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              welcomeConfig.showNoticeBanner !== false ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
-                            }`}
-                          ></span>
+                          <i className={`fas ${welcomeConfig.showNoticeBanner !== false ? 'fa-toggle-on text-base' : 'fa-toggle-off text-base'}`}></i>
                           <span>
-                            {welcomeConfig.showNoticeBanner !== false ? 'পপআপ সক্রিয় (ON)' : 'পপআপ বন্ধ (OFF)'}
+                            {welcomeConfig.showNoticeBanner !== false ? 'ANNOUNCEMENT: ON (চালু)' : 'ANNOUNCEMENT: OFF (বন্ধ)'}
                           </span>
                         </button>
                       </div>
@@ -9800,13 +10393,14 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => handleQuickToggleFeature('showNoticeBanner', !adminShowNoticeBanner)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer active:scale-95 ${
+                          className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer active:scale-95 shadow-md flex items-center gap-1.5 ${
                             adminShowNoticeBanner
                               ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
-                              : 'bg-red-500/30 text-red-300 border border-red-500/40'
+                              : 'bg-red-600 text-white shadow-red-500/30'
                           }`}
                         >
-                          {adminShowNoticeBanner ? '✅ ব্যানার সক্রিয় (ON)' : '❌ ব্যানার বন্ধ (OFF)'}
+                          <i className={`fas ${adminShowNoticeBanner ? 'fa-toggle-on text-sm' : 'fa-toggle-off text-sm'}`}></i>
+                          <span>{adminShowNoticeBanner ? 'ANNOUNCEMENT: ON (চালু)' : 'ANNOUNCEMENT: OFF (বন্ধ)'}</span>
                         </button>
                       </div>
                     </div>
@@ -11929,8 +12523,134 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* 2. Referral Telegram Bot & Channel Link Control */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-950/60 via-slate-900 to-slate-900 border border-sky-500/30 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-xs font-black text-white flex items-center gap-1.5">
+                          <i className="fab fa-telegram text-sky-400"></i>
+                          <span>Referral Telegram Bot & Channel (টেলিগ্রাম বট ও চ্যানেল রেফারেল লিংক)</span>
+                        </label>
+                        <span className="text-[10px] text-sky-300 font-mono bg-sky-500/20 px-2 py-0.5 rounded-full border border-sky-400/30">
+                          @{ (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '') }
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        আপনার টেলিগ্রাম বট ইউজারনেম ও চ্যানেল লিংক সেট করুন। ইউজারদের রেফারেল ড্যাশবোর্ডে স্বয়ংক্রিয়ভাবে বট রেফারেল লিংক তৈরি হবে।
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Telegram Bot Username */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                            <span>টেলিগ্রাম বট ইউজারনেম (Bot Username)</span>
+                            <span className="text-[9px] text-sky-400 font-mono">যেমন: RF2_SMM_bot</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              className="input-modern text-xs font-mono text-sky-300 pl-8"
+                              placeholder="RF2_SMM_bot"
+                              value={referralConfig.telegramBotUsername || ''}
+                              onChange={(e) => {
+                                const clean = e.target.value.replace(/^@/, '').trim();
+                                setReferralConfig((prev) => ({ ...prev, telegramBotUsername: clean }));
+                              }}
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sky-400 font-mono text-xs">@</span>
+                          </div>
+                          {/* Quick Bot Chips */}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {['RF2_SMM_bot', 'Turbo_DownloaderBot', 'FARJU_SMM_PANAL'].map((bot) => (
+                              <button
+                                key={bot}
+                                type="button"
+                                onClick={() => setReferralConfig((prev) => ({ ...prev, telegramBotUsername: bot }))}
+                                className={`px-2 py-0.5 rounded-lg text-[9px] font-mono transition border ${
+                                  (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '') === bot
+                                    ? 'bg-sky-500 text-black font-bold border-sky-400'
+                                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                                }`}
+                              >
+                                @{bot}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Telegram Channel / Official URL */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                            <span>অফিসিয়াল টেলিগ্রাম লিংক (Channel URL)</span>
+                            <span className="text-[9px] text-amber-400 font-mono">যেমন: https://t.me/RF2_SMM</span>
+                          </label>
+                          <input
+                            type="url"
+                            className="input-modern text-xs font-mono text-amber-300"
+                            placeholder="https://t.me/RF2_SMM"
+                            value={referralConfig.telegramChannelUrl || ''}
+                            onChange={(e) => {
+                              setReferralConfig((prev) => ({ ...prev, telegramChannelUrl: e.target.value.trim() }));
+                            }}
+                          />
+                          {/* Quick Channel Chips */}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {['https://t.me/RF2_SMM', 'https://t.me/FARJU_SMM_PANAL'].map((ch) => (
+                              <button
+                                key={ch}
+                                type="button"
+                                onClick={() => setReferralConfig((prev) => ({ ...prev, telegramChannelUrl: ch }))}
+                                className={`px-2 py-0.5 rounded-lg text-[9px] font-mono transition border ${
+                                  (referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM') === ch
+                                    ? 'bg-amber-500 text-black font-bold border-amber-400'
+                                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                                }`}
+                              >
+                                {ch.replace('https://t.me/', '@')}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Live Generated Preview & Save Button */}
+                      <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-[11px] text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-slate-400">বট রেফারেল প্রিভিউ: </span>
+                          <code className="text-sky-300 font-mono">
+                            https://t.me/{(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_username
+                          </code>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setAdminSavingReferralConfig(true);
+                              const cleanBot = (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim();
+                              const cleanCh = (referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM').trim();
+                              await setDoc(doc(db, 'settings', 'referral_config'), {
+                                ...referralConfig,
+                                telegramBotUsername: cleanBot,
+                                telegramChannelUrl: cleanCh
+                              }, { merge: true });
+                              showToast('✅ Telegram Bot & Channel settings saved!', 'success');
+                              haptic('success');
+                            } catch (e: any) {
+                              showToast('Error saving telegram config: ' + e.message, 'error');
+                            } finally {
+                              setAdminSavingReferralConfig(false);
+                            }
+                          }}
+                          disabled={adminSavingReferralConfig}
+                          type="button"
+                          className="px-4 py-1.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-black rounded-xl shadow transition whitespace-nowrap active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <i className="fas fa-save"></i>
+                          <span>Save Telegram Bot Settings</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* 2. System Active Status */}
+                      {/* 3. System Active Status */}
                       <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-white/10 space-y-2">
                         <label className="text-xs font-extrabold text-white flex items-center justify-between">
                           <span>System Active Status</span>
@@ -12178,17 +12898,22 @@ export default function App() {
               <span className="text-[10px] font-bold">Profile</span>
             </button>
 
+            {/* Admin Tab Navigation - ONLY VISIBLE TO LOGGED IN ADMIN */}
             {isAdminUser && (
               <button
                 onClick={() => {
                   setActiveTab(activeTab === 'admin' ? 'home' : 'admin');
                   haptic('heavy');
                 }}
-                className={`flex flex-col items-center gap-1 transition ${
-                  activeTab === 'admin' ? 'text-amber-400 scale-105' : 'text-amber-500/70 hover:text-amber-400'
+                className={`flex flex-col items-center gap-1 transition cursor-pointer ${
+                  activeTab === 'admin'
+                    ? 'text-amber-400 scale-105 font-bold'
+                    : 'text-amber-500/80 hover:text-amber-300'
                 }`}
               >
-                <i className="fas fa-crown text-base"></i>
+                <div className="relative">
+                  <i className="fas fa-crown text-base"></i>
+                </div>
                 <span className="text-[10px] font-bold">Admin</span>
               </button>
             )}
@@ -12391,12 +13116,12 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Referral Link Box */}
+                {/* Website Referral Link Box */}
                 <div className="bg-slate-800/90 border border-amber-500/30 p-3.5 rounded-2xl space-y-2.5 shadow-inner">
                   <label className="text-xs font-bold text-amber-300 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <i className="fas fa-link text-[11px]"></i>
-                      <span>আপনার রেফারেল লিংক</span>
+                      <i className="fas fa-globe text-[11px] text-cyan-400"></i>
+                      <span>ওয়েবসাইট রেফারেল লিংক (Website Link)</span>
                     </span>
                     <span className="text-[9px] text-emerald-400 font-normal">১ ক্লিকে কপি করুন</span>
                   </label>
@@ -12418,10 +13143,10 @@ export default function App() {
                           ? `${referralConfig.websiteUrl.replace(/\/+$/, '')}/?ref=${currentUser?.username || ''}`
                           : `${window.location.origin}/?ref=${currentUser?.username || ''}`;
                         navigator.clipboard.writeText(link);
-                        showToast('✅ রেফারেল লিংক কপি করা হয়েছে!', 'success');
+                        showToast('✅ ওয়েবসাইট রেফারেল লিংক কপি করা হয়েছে!', 'success');
                         haptic('success');
                       }}
-                      className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-lg shadow whitespace-nowrap active:scale-95 transition"
+                      className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-lg shadow whitespace-nowrap active:scale-95 transition cursor-pointer"
                     >
                       <i className="fas fa-copy mr-1"></i> Copy
                     </button>
@@ -12436,22 +13161,103 @@ export default function App() {
                         showToast('✅ রেফারেল কোড কপি করা হয়েছে!', 'success');
                         haptic('success');
                       }}
-                      className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1"
+                      className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <i className="fas fa-copy"></i> কপি কোড
                     </button>
                   </div>
                 </div>
 
+                {/* Telegram Bot Referral Link Box */}
+                <div className="bg-gradient-to-r from-sky-950/80 via-slate-900 to-blue-950/80 border border-sky-500/40 p-3.5 rounded-2xl space-y-2.5 shadow-[0_4px_20px_rgba(14,165,233,0.15)] relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                      <i className="fab fa-telegram text-sky-400 text-sm"></i>
+                      <span>টেলিগ্রাম বট রেফারেল লিংক (Telegram Bot)</span>
+                    </label>
+                    <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <i className="fas fa-robot text-[9px]"></i>
+                      <span>Bot Link</span>
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 bg-black/60 border border-sky-500/30 rounded-xl px-3 py-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`}
+                      className="bg-transparent text-[11px] font-mono text-sky-200 outline-none w-full select-all"
+                    />
+                    <button
+                      onClick={() => {
+                        const botUsername = (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim();
+                        const botLink = `https://t.me/${botUsername}?start=ref_${currentUser?.username || ''}`;
+                        navigator.clipboard.writeText(botLink);
+                        showToast('✅ টেলিগ্রাম বট রেফারেল লিংক কপি করা হয়েছে!', 'success');
+                        haptic('success');
+                      }}
+                      className="px-3 py-1 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-black rounded-lg shadow whitespace-nowrap active:scale-95 transition cursor-pointer"
+                    >
+                      <i className="fas fa-copy mr-1"></i> Copy
+                    </button>
+                    <a
+                      href={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-sky-300 text-xs font-bold rounded-lg border border-sky-400/30 whitespace-nowrap active:scale-95 transition flex items-center gap-1 cursor-pointer"
+                      title="বট ওপেন করুন"
+                    >
+                      <i className="fas fa-external-link-alt text-[10px]"></i> Open
+                    </a>
+                  </div>
+
+                  {/* Telegram Channel / Official Link */}
+                  <div className="flex flex-wrap items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs gap-2">
+                    <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                      <i className="fas fa-bullhorn text-sky-400 text-xs"></i>
+                      <span>অফিসিয়াল টেলিগ্রাম:</span>
+                      <span className="text-sky-300 font-mono font-bold truncate max-w-[140px] sm:max-w-[200px]">
+                        {referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const channelUrl = referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM';
+                          navigator.clipboard.writeText(channelUrl);
+                          showToast('✅ টেলিগ্রাম লিংক কপি করা হয়েছে!', 'success');
+                          haptic('success');
+                        }}
+                        className="text-sky-300 hover:text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <i className="fas fa-copy"></i> কপি
+                      </button>
+                      <a
+                        href={referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-400 hover:text-amber-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <i className="fas fa-paper-plane"></i> জয়েন
+                      </a>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-sky-200/80 leading-relaxed">
+                    💡 বন্ধুরা আপনার এই টেলিগ্রাম বট লিংকে ক্লিক করে বটে <strong className="text-white font-mono">/start</strong> দিলেই আপনার রেফারেল হিসেবে রেজিস্টার হবে।
+                  </p>
+                </div>
+
                 {/* Social Share Buttons */}
                 <div className="grid grid-cols-2 gap-2">
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `🔥 RF SMM PANEL - বাংলাদেশের সেরা ও বিশ্বস্ত সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্ম!\nলাইক, ফলোয়ার, ওয়াচটাইম নিন মাত্র কয়েক টাকায়।\n🎁 এখনই একাউন্ট খুলুন এবং ব্যালেন্স যোগ করুন:\n${
+                      `🔥 RF SMM PANEL - বাংলাদেশের সেরা ও বিশ্বস্ত সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্ম!\nলাইক, ফলোয়ার, ওয়াচটাইম নিন মাত্র কয়েক টাকায়।\n🎁 ওয়েবসাইট দিয়ে যোগ দিন:\n${
                         referralConfig.websiteUrl
                           ? `${referralConfig.websiteUrl.replace(/\/+$/, '')}/?ref=${currentUser?.username || ''}`
                           : `${window.location.origin}/?ref=${currentUser?.username || ''}`
-                      }`
+                      }\n🤖 টেলিগ্রাম বট দিয়ে যোগ দিন:\nhttps://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -12463,10 +13269,8 @@ export default function App() {
 
                   <a
                     href={`https://t.me/share/url?url=${encodeURIComponent(
-                      referralConfig.websiteUrl
-                        ? `${referralConfig.websiteUrl.replace(/\/+$/, '')}/?ref=${currentUser?.username || ''}`
-                        : `${window.location.origin}/?ref=${currentUser?.username || ''}`
-                    )}&text=${encodeURIComponent('🔥 RF SMM PANEL - বাংলাদেশের সেরা SMM প্ল্যাটফর্ম! এখনই যুক্ত হোন')}`}
+                      `https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`
+                    )}&text=${encodeURIComponent('🔥 RF SMM PANEL - বাংলাদেশের সেরা SMM প্ল্যাটফর্ম ও টেলিগ্রাম বট! এখনই একাউন্ট খুলুন ও ৫% বোনাস নিন')}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#229ED9]/20 hover:bg-[#229ED9]/30 border border-[#229ED9]/40 rounded-xl text-[#229ED9] text-xs font-bold transition active:scale-95"
@@ -12667,6 +13471,115 @@ export default function App() {
                     }`}
                   >
                     {is3DEnabled ? 'ON ⚡' : 'OFF ⛔'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Admin Security Access Modal */}
+          {showAdminAccessModal && (
+            <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-md bg-gradient-to-b from-slate-900 via-[#0b1329] to-slate-950 border border-amber-500/40 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.25)] text-white relative">
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminAccessModal(false);
+                    setAdminPinInput('');
+                    setAdminPinError('');
+                  }}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-full bg-white/5 border border-white/10 w-8 h-8 flex items-center justify-center transition"
+                >
+                  <i className="fas fa-times text-xs"></i>
+                </button>
+
+                {/* Header Medallion */}
+                <div className="text-center mb-5">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-3 shadow-[0_0_25px_rgba(245,158,11,0.5)] border border-amber-300/40 text-slate-950 text-2xl font-black">
+                    <i className="fas fa-crown"></i>
+                  </div>
+                  <h3 className="text-lg font-black text-white">
+                    এডমিন প্যানেলে প্রবেশ করুন
+                  </h3>
+                  <p className="text-xs text-amber-200/80 mt-1">
+                    আর এফ এসএমএম প্যানেল অ্যাডমিন সিকিউরিটি ভেরিফিকেশন
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>Admin PIN / Password</span>
+                      <span className="text-[10px] text-amber-400 font-mono">মাস্টার পিন বা পাসওয়ার্ড</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showAdminPinPassword ? "text" : "password"}
+                        className="auth-input pl-10 pr-10 text-center tracking-widest font-mono text-base font-black bg-slate-900/90 border-amber-500/40 focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                        placeholder="এডমিন পিন লিখুন (যেমন: 123456)"
+                        value={adminPinInput}
+                        onChange={(e) => {
+                          setAdminPinInput(e.target.value);
+                          if (adminPinError) setAdminPinError('');
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdminPin()}
+                        autoFocus
+                      />
+                      <i className="fas fa-key absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400 text-xs"></i>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminPinPassword(!showAdminPinPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                      >
+                        <i className={`fas ${showAdminPinPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                      </button>
+                    </div>
+                    {adminPinError && (
+                      <p className="text-[11px] text-red-400 mt-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                        <i className="fas fa-exclamation-triangle text-xs"></i>
+                        <span>{adminPinError}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quick Helper Button for Master PIN */}
+                  <div className="flex items-center justify-between text-[11px] px-1 text-slate-400">
+                    <span>কুইক পিন সাজেশন:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPinInput('123456')}
+                      className="text-amber-400 hover:text-amber-300 font-mono font-bold underline cursor-pointer"
+                    >
+                      123456
+                    </button>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="button"
+                    onClick={handleVerifyAdminPin}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm shadow-[0_0_20px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+                  >
+                    <i className="fas fa-unlock text-xs"></i>
+                    <span>এডমিন প্যানেল আনলক করুন ⚡</span>
+                  </button>
+
+                  <div className="relative my-2">
+                    <div className="h-[1px] bg-white/10 w-full" />
+                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0b1329] px-2 text-[10px] text-slate-400 uppercase font-mono">
+                      অথবা সরাসরি
+                    </span>
+                  </div>
+
+                  {/* Direct One Tap Farju Admin Login */}
+                  <button
+                    type="button"
+                    onClick={handleDirectAdminLogin}
+                    className="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+                  >
+                    <i className="fas fa-user-shield text-xs text-amber-400"></i>
+                    <span>Farju Admin (rashal117) দিয়ে সরাসরি প্রবেশ 👑</span>
                   </button>
                 </div>
               </div>
