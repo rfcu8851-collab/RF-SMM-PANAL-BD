@@ -8,9 +8,28 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = 3000;
 
   app.use(express.json());
+
+  // Health check
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  // SMM Services Proxy
+  app.get("/api/smm/services", async (req, res) => {
+    try {
+      const apiKey = process.env.SMM_API_KEY || "abb6b46205ede0b57a7c53580646fc7a";
+      const targetUrl = `https://my.smmgen.com/api/v2?key=${apiKey}&action=services`;
+      const response = await fetch(targetUrl);
+      const data = await response.json();
+      return res.json(data);
+    } catch (err: any) {
+      console.error("SMM Services Fetch Error:", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch services" });
+    }
+  });
 
   // AI Support API endpoint
   app.post("/api/ai-support", async (req, res) => {
@@ -272,6 +291,8 @@ Guidelines:
         status,
         createdAt,
         siteLogo,
+        comments,
+        serviceType,
       } = req.body;
 
       const botToken =
@@ -309,6 +330,10 @@ Guidelines:
       const safeCost = Number(cost || 0).toFixed(2);
       const safeUser = escapeHtml(userName || (userEmail ? userEmail.split("@")[0] : "Verified Client"));
       const safeStatus = escapeHtml(status || "Processing ⚡");
+      const isCustomComments = Boolean(comments && comments.trim());
+      const commentsSnippet = isCustomComments
+        ? `\n💬 <b>Custom Comments (${comments.split('\n').filter(Boolean).length} lines):</b>\n<code>${escapeHtml(comments.slice(0, 260))}${comments.length > 260 ? '...' : ''}</code>`
+        : '';
 
       const stylishCaption = `🚀 <b>NEW ORDER PLACED | নতুন অর্ডার নোটিফিকেশন</b> 🌟
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -319,7 +344,7 @@ Guidelines:
 🔢 <b>Quantity:</b> <b>${safeQty}</b>
 💰 <b>Total Price:</b> <b>${safeCost} ৳ (Coins)</b>
 👤 <b>Customer:</b> <b>${safeUser}</b>
-⚡ <b>Status:</b> <b>${safeStatus}</b>
+⚡ <b>Status:</b> <b>${safeStatus}</b>${commentsSnippet}
 📅 <b>Time (BD):</b> <b>${dateStr}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 🔥 <i>RF SMM PANEL BD — সবচেয়ে দ্রুত ও বিশ্বস্ত অটোমেটেড প্যানেল</i>`;
@@ -401,6 +426,35 @@ Guidelines:
       console.error("Telegram Order Notify API Error:", err);
       // Return 200 with error details so it never breaks frontend
       return res.json({ success: false, error: err.message });
+    }
+  });
+
+  // SMM Panel Proxy Endpoint (supports GET & POST with custom comments)
+  app.all("/api/smm/order", async (req, res) => {
+    try {
+      const apiKey = process.env.SMM_API_KEY || "64994346bbbbeeaa10307df325162283";
+      const apiBase = "https://my.smmgen.com/api/v2";
+
+      let service = req.query.service || req.body?.service;
+      let link = req.query.link || req.body?.link;
+      let quantity = req.query.quantity || req.body?.quantity;
+      let comments = req.query.comments || req.body?.comments;
+      let action = req.query.action || req.body?.action || "add";
+
+      const params = new URLSearchParams();
+      params.append("key", String(apiKey));
+      params.append("action", String(action));
+      if (service) params.append("service", String(service));
+      if (link) params.append("link", String(link));
+      if (quantity) params.append("quantity", String(quantity));
+      if (comments) params.append("comments", String(comments));
+
+      const upstreamRes = await fetch(`${apiBase}?${params.toString()}`);
+      const data = await upstreamRes.json();
+      return res.json(data);
+    } catch (err: any) {
+      console.error("SMM Proxy Order Error:", err);
+      return res.status(500).json({ error: err.message || "Failed to reach SMM provider" });
     }
   });
 

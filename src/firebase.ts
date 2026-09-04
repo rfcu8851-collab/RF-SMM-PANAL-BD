@@ -469,6 +469,19 @@ export const DEFAULT_SERVICES = [
     max: 500000,
     desc: "Targeted keyword traffic from Google search engine.",
     apiServiceId: "18918"
+  },
+
+  // ==================== TIKTOK CUSTOM COMMENTS (SERVICE 2) ====================
+  {
+    category: "TikTok - Comments [ Working After Update ] NEW",
+    name: "15232 - TikTok Comments ~ Custom ~ Real Account ~ Max 100K",
+    price: 150,
+    min: 1,
+    max: 100000,
+    desc: "High quality custom TikTok comments from active real profiles. Instant start. Fast delivery.",
+    apiServiceId: "15232",
+    serviceType: "service_2",
+    avgTime: "2 minutes"
   }
 ];
 

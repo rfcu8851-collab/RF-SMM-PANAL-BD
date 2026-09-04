@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Live3DCanvas, ThreeDTheme, THEME_CONFIGS } from './components/Live3DCanvas';
 import { Welcome3DModal } from './components/Welcome3DModal';
+import { AnnouncementPopupModal, AnnouncementSlide } from './components/AnnouncementPopupModal';
 import { LiveAISupportModal } from './components/LiveAISupportModal';
 import { AdminLiveSupportPanel } from './components/AdminLiveSupportPanel';
 import {
@@ -33,6 +34,8 @@ interface ServiceData {
   max: number;
   desc?: string;
   apiServiceId?: string;
+  serviceType?: 'service_1' | 'service_2' | 'custom_comments' | string;
+  avgTime?: string;
 }
 
 interface OrderData {
@@ -48,6 +51,8 @@ interface OrderData {
   apiOrderId?: string | number;
   apiError?: string;
   apiStatus?: string;
+  serviceType?: string;
+  comments?: string;
 }
 
 export interface PaymentMethodConfig {
@@ -346,6 +351,14 @@ export default function App() {
     audioFileName?: string;
     siteLogo?: string;
     aiSupportEnabled?: boolean;
+    showNoticeBanner?: boolean;
+    bannerTitle?: string;
+    bannerMessage?: string;
+    bannerBadge?: string;
+    bannerImageUrl?: string;
+    bannerActionText?: string;
+    bannerActionUrl?: string;
+    bannerTheme?: 'amber' | 'blue' | 'emerald' | 'rose' | 'purple';
   }>({
     title: 'ওয়েলকাম RF SMM PANEL!',
     text: 'ওয়েলকাম টু আর এফ এসএমএম প্যানেল। বাংলাদেশের এক নম্বর সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্মে আপনাকে স্বাগতম।',
@@ -359,6 +372,14 @@ export default function App() {
     customAudioUrl: '',
     audioFileName: '',
     aiSupportEnabled: true,
+    showNoticeBanner: true,
+    bannerTitle: '🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻',
+    bannerMessage: '🙇‍♂️ আর এফ এসএমএম প্যানেল ব্যবহার করার জন্য আপনাকে আন্তরিক ধন্যবাদ। আমাদের ২৪/৭ অটোমেটিক বিকাশ, নগদ ও রকেট ডিপোজিট সিস্টেম সম্পূর্ণ সক্রিয় রয়েছে। যেকোনো অর্ডারে সর্বোচ্চ গতি নিশ্চিত করতে আমরা নিরবচ্ছিন্ন কাজ করছি।',
+    bannerBadge: 'ANNOUNCEMENT',
+    bannerImageUrl: '',
+    bannerActionText: 'টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡',
+    bannerActionUrl: 'https://t.me/RF2_SMM',
+    bannerTheme: 'amber',
   });
   const [adminWelcomeTitle, setAdminWelcomeTitle] = useState('ওয়েলকাম RF SMM PANEL!');
   const [adminWelcomeText, setAdminWelcomeText] = useState('ওয়েলকাম টু আর এফ এসএমএম প্যানেল। বাংলাদেশের এক নম্বর সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্মে আপনাকে স্বাগতম।');
@@ -369,6 +390,20 @@ export default function App() {
   const [adminShowNoticeTicker, setAdminShowNoticeTicker] = useState(true);
   const [adminNoticeText, setAdminNoticeText] = useState('⚡ ২৪/৭ ইনস্ট্যান্ট সার্ভিস সক্রিয় | বিকাশ, নগদ, রকেটে ইনস্ট্যান্ট ডিপোজিট বোনাস চলছে | যেকোনো প্রয়োজনে আমাদের লাইভ সাপোর্টে যোগাযোগ করুন 🚀');
   const [adminSavingNotice, setAdminSavingNotice] = useState(false);
+
+  // Admin Notice Banner Management States
+  const [adminShowNoticeBanner, setAdminShowNoticeBanner] = useState(true);
+  const [adminBannerTitle, setAdminBannerTitle] = useState('🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻');
+  const [adminBannerMessage, setAdminBannerMessage] = useState('🙇‍♂️ আর এফ এসএমএম প্যানেল ব্যবহার করার জন্য আপনাকে আন্তরিক ধন্যবাদ। আমাদের ২৪/৭ অটোমেটিক বিকাশ, নগদ ও রকেট ডিপোজিট সিস্টেম সম্পূর্ণ সক্রিয় রয়েছে। যেকোনো অর্ডারে সর্বোচ্চ গতি নিশ্চিত করতে আমরা নিরবচ্ছিন্ন কাজ করছি।');
+  const [adminBannerBadge, setAdminBannerBadge] = useState('ANNOUNCEMENT');
+  const [adminBannerImageUrl, setAdminBannerImageUrl] = useState('');
+  const [adminBannerActionText, setAdminBannerActionText] = useState('টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡');
+  const [adminBannerActionUrl, setAdminBannerActionUrl] = useState('https://t.me/RF2_SMM');
+  const [adminBannerTheme, setAdminBannerTheme] = useState<'amber' | 'blue' | 'emerald' | 'rose' | 'purple'>('amber');
+  const [adminSavingBanner, setAdminSavingBanner] = useState(false);
+  const [adminBannerImageUploading, setAdminBannerImageUploading] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [adminAudioMode, setAdminAudioMode] = useState<'tts' | 'custom'>('tts');
   const [adminCustomAudioUrl, setAdminCustomAudioUrl] = useState('');
   const [adminAudioFileName, setAdminAudioFileName] = useState('');
@@ -438,6 +473,7 @@ export default function App() {
   const [currentService, setCurrentService] = useState<ServiceData | null>(null);
   const [targetLink, setTargetLink] = useState('');
   const [quantity, setQuantity] = useState<number>(100);
+  const [customComments, setCustomComments] = useState('');
   const [orderSubmitting, setOrderSubmitting] = useState(false);
 
   // Form Field Errors
@@ -445,6 +481,7 @@ export default function App() {
   const [svcErr, setSvcErr] = useState('');
   const [linkErr, setLinkErr] = useState('');
   const [qtyErr, setQtyErr] = useState('');
+  const [commentsErr, setCommentsErr] = useState('');
 
   // Orders State
   const [ordersList, setOrdersList] = useState<OrderData[]>([]);
@@ -482,7 +519,51 @@ export default function App() {
   const [newMethodNote, setNewMethodNote] = useState('');
 
   // Admin Manual Service Form & Control State
-  const [adminSubTab, setAdminSubTab] = useState<'users' | 'payment' | 'deposits' | 'orders' | 'services' | 'notifications' | 'links' | 'welcome' | 'settings' | 'tasks' | 'referrals' | 'support'>('users');
+  const [adminSubTab, setAdminSubTab] = useState<'users' | 'announcement' | 'payment' | 'deposits' | 'orders' | 'services' | 'notifications' | 'links' | 'welcome' | 'settings' | 'tasks' | 'referrals' | 'support'>('users');
+
+  // Announcement Popup Slides (Matching Screenshot with Crown, Poster, Bengali Gratitude, Previous/Next Buttons)
+  const DEFAULT_ANNOUNCEMENT_SLIDES: AnnouncementSlide[] = [
+    {
+      id: 'slide-1',
+      badge: 'ANNOUNCEMENT',
+      title: '🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻',
+      message: '🙇 সাম্প্রতিক লেনদেনে বিলম্বের কারণে সৃষ্ট অসুবিধার জন্য আমরা আন্তরিকভাবে ক্ষমা চেয়ে নিচ্ছি। আমাদের বিকাশ, নগদ ও রকেট সিস্টেম বর্তমানে ১০০% সচল রয়েছে এবং সকল অর্ডার দ্রুত সম্পন্ন হচ্ছে।',
+      imageUrl: '',
+      actionText: 'টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡',
+      actionUrl: 'https://t.me/RF2_SMM',
+      theme: 'amber',
+    },
+    {
+      id: 'slide-2',
+      badge: 'SPECIAL BONUS',
+      title: '🎉 বিশেষ ডিপোজিট ক্যাশব্যাক বোনাস ধামাকা!',
+      message: '💰 বিকাশ, নগদ বা রকেটে যেকোনো ডিপোজিটে পাচ্ছেন ইনস্ট্যান্ট ৫% থেকে ১০% পর্যন্ত ক্যাশব্যাক বোনাস! অফারটি সীমিত সময়ের জন্য প্রযোজ্য। যেকোনো প্রয়োজনে লাইভ সাপোর্ট সবসময় খোলা আছে।',
+      imageUrl: '',
+      actionText: 'ডিপোজিট করুন 💰',
+      actionUrl: '#deposit',
+      theme: 'emerald',
+    },
+    {
+      id: 'slide-3',
+      badge: 'FAST DELIVERY',
+      title: '⚡ ফেসবুক, ইনস্টাগ্রাম ও টিকটক সার্ভিস সুপার ফাস্ট!',
+      message: '🔥 ফেসবুক ফলোয়ার, রিয়েকশন, ইউটিউব ওয়াচটাইম ও টিকটক ভিউ ড্রপলেস হাই কোয়ালিটিতে দ্রুত ডেলিভারি দেওয়া হচ্ছে। অর্ডার করার মাত্র ৫ মিনিটের মধ্যে কাজ শুরু হয়ে যায়!',
+      imageUrl: '',
+      actionText: 'সার্ভিস লিস্ট দেখুন 📋',
+      actionUrl: '#services',
+      theme: 'blue',
+    },
+  ];
+
+  const [announcementSlides, setAnnouncementSlides] = useState<AnnouncementSlide[]>(() => {
+    try {
+      const cached = localStorage.getItem('rf_smm_announcement_slides');
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return DEFAULT_ANNOUNCEMENT_SLIDES;
+  });
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [announcementImageUploading, setAnnouncementImageUploading] = useState(false);
   const [paymentMethodsConfig, setPaymentMethodsConfig] = useState<Record<string, PaymentMethodConfig>>({
     bkash: {
       id: 'bkash',
@@ -573,6 +654,8 @@ export default function App() {
   const [adminMax, setAdminMax] = useState('100000');
   const [adminDesc, setAdminDesc] = useState('');
   const [adminApiServiceId, setAdminApiServiceId] = useState('');
+  const [adminServiceType, setAdminServiceType] = useState<'service_1' | 'service_2'>('service_1');
+  const [adminAvgTime, setAdminAvgTime] = useState('2 minutes');
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [adminSearch, setAdminSearch] = useState('');
   const [adminSubmitting, setAdminSubmitting] = useState(false);
@@ -2035,6 +2118,14 @@ export default function App() {
               audioFileName: data.audioFileName || '',
               siteLogo: data.siteLogo || '',
               aiSupportEnabled: data.aiSupportEnabled !== undefined ? data.aiSupportEnabled : true,
+              showNoticeBanner: data.showNoticeBanner !== false,
+              bannerTitle: data.bannerTitle || '📢 আর এফ এসএমএম প্যানেল অফিসিয়াল নোটিশ',
+              bannerMessage: data.bannerMessage || '⚡ ২৪/৭ ইনস্ট্যান্ট অটোমেটিক সার্ভিস সক্রিয়! বিকাশ, নগদ ও রকেটে ডিপোজিট স্বয়ংক্রিয়ভাবে সেকেন্ডে ব্যালেন্সে যুক্ত হয়। যেকোনো সোশ্যাল মিডিয়া অর্ডার ৫ মিনিটের মধ্যে শুরু হয়ে যায়!',
+              bannerBadge: data.bannerBadge || 'SPECIAL NOTICE',
+              bannerImageUrl: data.bannerImageUrl || '',
+              bannerActionText: data.bannerActionText || 'টেলিগ্রাম চ্যানেলে জয়েন করুন',
+              bannerActionUrl: data.bannerActionUrl || 'https://t.me/RF2_SMM',
+              bannerTheme: (data.bannerTheme || 'amber') as 'amber' | 'blue' | 'emerald' | 'rose' | 'purple',
             };
             setWelcomeConfig(cfg);
             setAdminWelcomeTitle(cfg.title);
@@ -2047,9 +2138,29 @@ export default function App() {
             if (data.noticeText) {
               setAdminNoticeText(data.noticeText);
             }
+            setAdminShowNoticeBanner(cfg.showNoticeBanner);
+            setAdminBannerTitle(cfg.bannerTitle);
+            setAdminBannerMessage(cfg.bannerMessage);
+            setAdminBannerBadge(cfg.bannerBadge);
+            setAdminBannerImageUrl(cfg.bannerImageUrl);
+            setAdminBannerActionText(cfg.bannerActionText);
+            setAdminBannerActionUrl(cfg.bannerActionUrl);
+            setAdminBannerTheme(cfg.bannerTheme);
             setAdminAudioMode(cfg.audioMode);
             setAdminCustomAudioUrl(cfg.customAudioUrl || '');
             setAdminAudioFileName(cfg.audioFileName || '');
+            if (data.default3DTheme) {
+              setThreeDTheme(data.default3DTheme as ThreeDTheme);
+              localStorage.setItem('smm_3d_theme', data.default3DTheme);
+            }
+            if (typeof data.is3DEnabled === 'boolean') {
+              setIs3DEnabled(data.is3DEnabled);
+              localStorage.setItem('smm_3d_enabled', String(data.is3DEnabled));
+            }
+            if (Array.isArray(data.announcementSlides) && data.announcementSlides.length > 0) {
+              setAnnouncementSlides(data.announcementSlides);
+              localStorage.setItem('rf_smm_announcement_slides', JSON.stringify(data.announcementSlides));
+            }
             if (data.siteLogo) {
               setAdminSiteLogo(data.siteLogo);
               setAdminSiteLogoInput(data.siteLogo);
@@ -2064,6 +2175,20 @@ export default function App() {
     );
     return () => unsub();
   }, []);
+
+  // Auto-display Announcement Popup Modal on load if not dismissed today and enabled by admin
+  useEffect(() => {
+    try {
+      const dismissedDate = localStorage.getItem('rf_smm_announcement_dismissed_date');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (dismissedDate !== todayStr && welcomeConfig.showNoticeBanner !== false) {
+        const timer = setTimeout(() => {
+          setShowAnnouncementModal(true);
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    } catch (_) {}
+  }, [welcomeConfig.showNoticeBanner]);
 
   // Handle Custom Audio File Upload (MP3, WAV, M4A, OGG)
   const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement> | React.DragEvent<HTMLDivElement>) => {
@@ -2207,9 +2332,35 @@ export default function App() {
     showToast('কাস্টম অডিও মুছে ফেলা হয়েছে। এখন টেক্সট-টু-স্পিচ চালু থাকবে।', 'info');
   };
 
+  // Admin 3D Canvas Global Toggle
+  const handleAdminToggle3D = async (enabled: boolean) => {
+    setIs3DEnabled(enabled);
+    localStorage.setItem('smm_3d_enabled', String(enabled));
+    haptic('light');
+    try {
+      await setDoc(doc(db, 'settings', 'welcome_config'), { is3DEnabled: enabled }, { merge: true });
+      showToast(`3D ব্যাকগ্রাউন্ড ${enabled ? 'সক্রিয় (ON)' : 'বন্ধ (OFF)'} করা হয়েছে`, 'success');
+    } catch (e) {
+      showToast(`3D ব্যাকগ্রাউন্ড ${enabled ? 'চালু' : 'বন্ধ'} হয়েছে`, 'info');
+    }
+  };
+
+  // Admin Select 3D Background Theme
+  const handleAdminSelect3DTheme = async (themeKey: ThreeDTheme) => {
+    setThreeDTheme(themeKey);
+    localStorage.setItem('smm_3d_theme', themeKey);
+    haptic('light');
+    try {
+      await setDoc(doc(db, 'settings', 'welcome_config'), { default3DTheme: themeKey }, { merge: true });
+      showToast(`3D ব্যাকগ্রাউন্ড থিম "${THEME_CONFIGS[themeKey]?.name || themeKey}" সেভ হয়েছে`, 'success');
+    } catch (e) {
+      showToast(`থিম "${THEME_CONFIGS[themeKey]?.name || themeKey}" নির্বাচন করা হয়েছে`, 'info');
+    }
+  };
+
   // Instant Toggle Any Feature from Admin Panel with immediate Firestore sync
   const handleQuickToggleFeature = async (
-    feature: 'soundEnabled' | 'enabled' | 'show3DButton' | 'is3DCanvasGlobal' | 'showNoticeTicker',
+    feature: 'soundEnabled' | 'enabled' | 'show3DButton' | 'is3DCanvasGlobal' | 'showNoticeTicker' | 'showNoticeBanner',
     value: boolean
   ) => {
     if (feature === 'soundEnabled') setAdminSoundEnabled(value);
@@ -2217,6 +2368,7 @@ export default function App() {
     if (feature === 'show3DButton') setAdminShow3DButton(value);
     if (feature === 'is3DCanvasGlobal') setAdmin3DCanvasGlobal(value);
     if (feature === 'showNoticeTicker') setAdminShowNoticeTicker(value);
+    if (feature === 'showNoticeBanner') setAdminShowNoticeBanner(value);
 
     setWelcomeConfig((prev) => ({ ...prev, [feature]: value }));
 
@@ -2236,6 +2388,186 @@ export default function App() {
     } catch (err: any) {
       console.error('Feature toggle error:', err);
       showToast('সেটিংস আপডেট ব্যর্থ: ' + err.message, 'error');
+    }
+  };
+
+  // Upload Notice Banner Image from device
+  const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('অনুগ্রহ করে ছবি ফাইল নির্বাচন করুন (JPG, PNG, WEBP)', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showToast('ছবির সাইজ ৮ MB এর নিচে হতে হবে', 'error');
+      return;
+    }
+
+    try {
+      setAdminBannerImageUploading(true);
+      const base64 = await compressImageToBase64(file, 1000, 600, 0.82);
+      setAdminBannerImageUrl(base64);
+      showToast('📸 ব্যানার ছবি সফলভাবে যুক্ত হয়েছে! সেভ বাটনে ক্লিক করুন।', 'success');
+      haptic('light');
+    } catch (err) {
+      console.error('Error uploading banner image:', err);
+      showToast('ছবি প্রসেস করতে ব্যর্থ হয়েছে', 'error');
+    } finally {
+      setAdminBannerImageUploading(false);
+    }
+  };
+
+  // Save Full Notice Banner (Admin Setting)
+  const handleSaveNoticeBanner = async () => {
+    if (!adminBannerTitle.trim() && !adminBannerMessage.trim()) {
+      showToast('ব্যানার শিরোনাম অথবা নোটিশ বার্তা দিন', 'error');
+      return;
+    }
+    setAdminSavingBanner(true);
+    try {
+      const bannerData = {
+        showNoticeBanner: adminShowNoticeBanner,
+        bannerTitle: adminBannerTitle.trim() || '📢 নোটিশ',
+        bannerMessage: adminBannerMessage.trim(),
+        bannerBadge: adminBannerBadge.trim() || 'NOTICE',
+        bannerImageUrl: adminBannerImageUrl.trim(),
+        bannerActionText: adminBannerActionText.trim(),
+        bannerActionUrl: adminBannerActionUrl.trim(),
+        bannerTheme: adminBannerTheme,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'settings', 'welcome_config'), bannerData, { merge: true });
+
+      setWelcomeConfig((prev) => ({
+        ...prev,
+        ...bannerData,
+      }));
+
+      showToast('✅ হোম নোটিশ ব্যানার সফলভাবে সেভ ও আপডেট হয়েছে!', 'success');
+      haptic('success');
+    } catch (err: any) {
+      console.error('Error saving notice banner:', err);
+      showToast('ব্যানার সেভ ব্যর্থ: ' + err.message, 'error');
+    } finally {
+      setAdminSavingBanner(false);
+    }
+  };
+
+  // Save Announcement Slides to Firestore (Matching Screenshot Crown Announcement Modal)
+  const handleSaveAnnouncementSlides = async () => {
+    try {
+      localStorage.setItem('rf_smm_announcement_slides', JSON.stringify(announcementSlides));
+      await setDoc(
+        doc(db, 'settings', 'welcome_config'),
+        {
+          announcementSlides,
+          bannerTitle: announcementSlides[0]?.title || adminBannerTitle,
+          bannerMessage: announcementSlides[0]?.message || adminBannerMessage,
+          bannerBadge: announcementSlides[0]?.badge || adminBannerBadge,
+          bannerImageUrl: announcementSlides[0]?.imageUrl || adminBannerImageUrl,
+          bannerActionText: announcementSlides[0]?.actionText || adminBannerActionText,
+          bannerActionUrl: announcementSlides[0]?.actionUrl || adminBannerActionUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      showToast('👑 অ্যানাউন্সমেন্ট পপআপ স্লাইডসমূহ সফলভাবে ক্লাউড ডাটাবেজে সেভ হয়েছে!', 'success');
+      haptic('heavy');
+    } catch (err: any) {
+      console.error('Save announcement error:', err);
+      showToast('সেভ ব্যর্থ: ' + err.message, 'error');
+    }
+  };
+
+  const handleAddAnnouncementSlide = () => {
+    const newSlide: AnnouncementSlide = {
+      id: `slide-${Date.now()}`,
+      badge: 'ANNOUNCEMENT',
+      title: '🔻 নতুন অ্যানাউন্সমেন্ট শিরোনাম 🔻',
+      message: 'এখানে আপনার নতুন নোটিশ বা অফারের বিস্তারিত বার্তা লিখুন...',
+      imageUrl: '',
+      actionText: 'বিস্তারিত দেখুন ⚡',
+      actionUrl: 'https://t.me/RF2_SMM',
+      theme: 'amber',
+    };
+    const updated = [...announcementSlides, newSlide];
+    setAnnouncementSlides(updated);
+    setActiveSlideIndex(updated.length - 1);
+    showToast('নতুন স্লাইড তৈরি হয়েছে! এডিট করে সেভ বাটনে ক্লিক করুন।', 'info');
+  };
+
+  const handleDeleteAnnouncementSlide = (indexToDelete: number) => {
+    if (announcementSlides.length <= 1) {
+      showToast('সর্বনিম্ন একটি স্লাইড অবশ্যই থাকতে হবে!', 'warning');
+      return;
+    }
+    const updated = announcementSlides.filter((_, idx) => idx !== indexToDelete);
+    setAnnouncementSlides(updated);
+    setActiveSlideIndex((prev) => Math.max(0, Math.min(prev, updated.length - 1)));
+    showToast('স্লাইড মুছে ফেলা হয়েছে! সেভ বাটনে ক্লিক করুন।', 'info');
+  };
+
+  const handleUpdateCurrentSlide = (field: keyof AnnouncementSlide, value: any) => {
+    setAnnouncementSlides((prev) => {
+      const copy = [...prev];
+      if (copy[activeSlideIndex]) {
+        copy[activeSlideIndex] = { ...copy[activeSlideIndex], [field]: value };
+      }
+      return copy;
+    });
+  };
+
+  const handleAnnouncementSlideImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('অনুগ্রহ করে ছবি ফাইল নির্বাচন করুন (JPG, PNG, WEBP)', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showToast('ছবির সাইজ ৮ মেগাবাইটের কম হতে হবে', 'warning');
+      return;
+    }
+
+    try {
+      setAnnouncementImageUploading(true);
+      const base64 = await compressImageToBase64(file, 1000, 600, 0.85);
+      handleUpdateCurrentSlide('imageUrl', base64);
+      showToast('✅ ছবি সফলভাবে যুক্ত হয়েছে! সেভ বাটনে ক্লিক করুন।', 'success');
+      haptic('light');
+    } catch (err) {
+      console.error('Error uploading announcement slide image:', err);
+      showToast('ছবি প্রসেস করতে সমস্যা হয়েছে', 'error');
+    } finally {
+      setAnnouncementImageUploading(false);
+    }
+  };
+
+  // Handle Home Banner Action Button Click
+  const handleBannerActionClick = (url?: string) => {
+    const target = (url || welcomeConfig.bannerActionUrl || '').trim();
+    if (!target) return;
+    haptic('heavy');
+    if (target === '#deposit' || target.toLowerCase() === 'deposit' || target === '#funds') {
+      setActiveTab('funds');
+    } else if (target === '#orders' || target.toLowerCase() === 'orders') {
+      setActiveTab('orders');
+    } else if (target === '#tasks' || target.toLowerCase() === 'tasks') {
+      setActiveTab('tasks');
+    } else if (target === '#referral' || target.toLowerCase() === 'referral') {
+      setActiveTab('profile');
+    } else if (target === '#services') {
+      setActiveTab('services');
+    } else if (target === '#search') {
+      setShowSearchModal(true);
+    } else if (target === '#support' || target.toLowerCase() === 'support') {
+      setShowAISupportModal(true);
+    } else if (target.startsWith('http://') || target.startsWith('https://')) {
+      window.open(target, '_blank');
+    } else {
+      window.open(target, '_blank');
     }
   };
 
@@ -3112,15 +3444,40 @@ export default function App() {
     }, 400);
   };
 
+  // Service 2 (Custom Comments) Detection Helper
+  const isCurrentService2 = Boolean(
+    currentService && (
+      currentService.serviceType === 'service_2' ||
+      currentService.serviceType === 'custom_comments' ||
+      currentService.name.toLowerCase().includes('custom comment') ||
+      (currentService.category.toLowerCase().includes('comment') && !currentService.serviceType)
+    )
+  );
+
   // Service Change
   const handleServiceChange = (svcId: string) => {
     haptic('light');
     setSelectedServiceId(svcId);
     setSvcErr('');
+    setCommentsErr('');
     const found = allServices.find((s) => s.id === svcId) || null;
     setCurrentService(found);
     if (found?.min) {
       setQuantity(found.min);
+    }
+    const isSvc2 = Boolean(
+      found && (
+        found.serviceType === 'service_2' ||
+        found.serviceType === 'custom_comments' ||
+        found.name.toLowerCase().includes('custom comment') ||
+        (found.category.toLowerCase().includes('comment') && !found.serviceType)
+      )
+    );
+    if (isSvc2 && customComments) {
+      const lines = customComments.split('\n').filter((l) => l.trim().length > 0);
+      if (lines.length > 0) {
+        setQuantity(lines.length);
+      }
     }
   };
 
@@ -3135,7 +3492,8 @@ export default function App() {
     quantity > 0 &&
       currentService &&
       quantity >= currentService.min &&
-      (!currentService.max || quantity <= currentService.max)
+      (!currentService.max || quantity <= currentService.max) &&
+      (!isCurrentService2 || (customComments.trim().length > 0 && customComments.split('\n').filter((l) => l.trim().length > 0).length >= (currentService.min || 1)))
   );
 
   let orderStepProgress = 10;
@@ -3161,19 +3519,24 @@ export default function App() {
   const placeSmmGenOrderApi = async (
     serviceId: string,
     link: string,
-    qty: number
+    qty: number,
+    comments?: string
   ): Promise<{ error?: string; order?: number; status?: string }> => {
     const apiKey = '64994346bbbbeeaa10307df325162283';
     const mappedService = SERVICE_ID_MAP[serviceId] || serviceId;
     const finalService = mappedService && mappedService.length >= 4 ? mappedService : '15806';
 
-    const queryParams = new URLSearchParams({
+    const paramsObj: Record<string, string> = {
       key: apiKey,
       action: 'add',
       service: String(finalService),
       link: String(link),
       quantity: String(qty)
-    }).toString();
+    };
+    if (comments && comments.trim()) {
+      paramsObj.comments = comments.trim();
+    }
+    const queryParams = new URLSearchParams(paramsObj).toString();
 
     // 1. Try Netlify / Vite Proxy GET endpoint
     try {
@@ -3198,6 +3561,7 @@ export default function App() {
           service: finalService,
           link,
           quantity: qty,
+          comments: comments && comments.trim() ? comments.trim() : undefined,
           apiKey,
           apiBase: 'https://my.smmgen.com/api/v2'
         })
@@ -3235,6 +3599,7 @@ export default function App() {
     setSvcErr('');
     setLinkErr('');
     setQtyErr('');
+    setCommentsErr('');
 
     if (!selectedCategory) {
       setCatErr('Please select a category');
@@ -3252,8 +3617,33 @@ export default function App() {
       return;
     }
 
-    const minQty = currentService.min || 10;
+    const minQty = currentService.min || 1;
     const maxQty = currentService.max || 999999999;
+
+    // Service 2 (Custom Comments) Validation
+    if (isCurrentService2) {
+      if (!customComments.trim()) {
+        setCommentsErr('অনুগ্রহ করে কমপক্ষে ১টি কমেন্ট লিখুন (প্রতি লাইনে ১টি)');
+        haptic('error');
+        return;
+      }
+      const lines = customComments.split('\n').filter((l) => l.trim().length > 0);
+      if (lines.length === 0) {
+        setCommentsErr('কমপক্ষে ১টি বৈধ কমেন্ট লাইন লিখুন');
+        haptic('error');
+        return;
+      }
+      if (lines.length < minQty) {
+        setCommentsErr(`সর্বনিম্ন ${minQty} টি কমেন্ট লাইন প্রয়োজন (এখন ${lines.length} টি আছে)`);
+        haptic('error');
+        return;
+      }
+      if (lines.length > maxQty) {
+        setCommentsErr(`সর্বোচ্চ ${maxQty} টি কমেন্ট লাইন দিতে পারবেন`);
+        haptic('error');
+        return;
+      }
+    }
 
     if (!quantity || quantity < minQty) {
       setQtyErr(`Minimum quantity is ${minQty}`);
@@ -3297,6 +3687,8 @@ export default function App() {
       return;
     }
 
+    const commentLinesCount = customComments.split('\n').filter((l) => l.trim().length > 0).length;
+
     // Confirm Modal
     setModalConfig({
       show: true,
@@ -3311,6 +3703,22 @@ export default function App() {
             <span className="text-slate-400">Quantity</span>
             <span className="font-bold">{quantity.toLocaleString()}</span>
           </div>
+          {isCurrentService2 && (
+            <div className="py-1.5 border-b border-dashed border-slate-700 text-left">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <i className="fas fa-comments text-amber-400 text-[10px]"></i>
+                  <span>Custom Comments</span>
+                </span>
+                <span className="font-mono text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded">
+                  {commentLinesCount} lines
+                </span>
+              </div>
+              <div className="bg-slate-900/90 border border-white/10 rounded-lg p-2 max-h-24 overflow-y-auto text-[10px] text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
+                {customComments}
+              </div>
+            </div>
+          )}
           <div className="flex justify-between py-1.5 border-b border-dashed border-slate-700">
             <span className="text-slate-400">Cost</span>
             <span className="font-bold text-blue-400">{calculatedCost.toFixed(2)} Coins</span>
@@ -3337,6 +3745,8 @@ export default function App() {
       const link = targetLink.trim();
       const qty = quantity;
       const apiSvcId = currentService.apiServiceId || '15806';
+      const svcType = currentService.serviceType || (isCurrentService2 ? 'service_2' : 'service_1');
+      const orderComments = isCurrentService2 ? customComments.trim() : '';
 
       // 1. Create order document in Firestore
       const orderRef = await addDoc(collection(db, 'orders'), {
@@ -3346,6 +3756,8 @@ export default function App() {
         link,
         cost,
         status: 'Pending',
+        serviceType: svcType,
+        comments: orderComments,
         timestamp: serverTimestamp(),
         createdAt: new Date().toISOString()
       });
@@ -3361,9 +3773,9 @@ export default function App() {
       setUserBalance(newBalance);
       setUserTotalOrders(newOrdersCount);
 
-      // 3. Trigger SMMGen API call
+      // 3. Trigger SMMGen API call with comments if Service 2
       showToast('Sending order to SMM Panel...', 'info');
-      const apiResponse = await placeSmmGenOrderApi(apiSvcId, link, qty);
+      const apiResponse = await placeSmmGenOrderApi(apiSvcId, link, qty, orderComments || undefined);
 
       if (apiResponse.order) {
         // API Success
@@ -3385,7 +3797,7 @@ export default function App() {
         showToast(`⚠️ Order saved locally. API error: ${apiErr}`, 'warning');
       }
 
-            // 4. Background Telegram Live Notification to 2 channels (@RF2_SMM & @FARJU_SMM_PANAL)
+      // 4. Background Telegram Live Notification to 2 channels (@RF2_SMM & @FARJU_SMM_PANAL)
       try {
         fetch('/api/telegram/order-notify', {
           method: 'POST',
@@ -3398,6 +3810,8 @@ export default function App() {
             quantity: qty,
             cost: cost,
             link: link,
+            comments: orderComments || undefined,
+            serviceType: svcType,
             userName: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'RF SMM Client'),
             userEmail: currentUser.email || '',
             status: apiResponse?.order ? 'Processing ⚡' : 'Pending ⏳',
@@ -3413,6 +3827,8 @@ export default function App() {
       setSelectedServiceId('');
       setCurrentService(null);
       setSelectedCategory('');
+      setCustomComments('');
+      setCommentsErr('');
 
       setTimeout(() => {
         setActiveTab('orders');
@@ -3562,7 +3978,9 @@ export default function App() {
         min: minNum,
         max: maxNum,
         desc: adminDesc.trim(),
-        apiServiceId: adminApiServiceId.trim()
+        apiServiceId: adminApiServiceId.trim(),
+        serviceType: adminServiceType || 'service_1',
+        avgTime: adminAvgTime.trim() || '2 minutes'
       };
 
       if (editingServiceId) {
@@ -3581,6 +3999,8 @@ export default function App() {
       setAdminMax('100000');
       setAdminDesc('');
       setAdminApiServiceId('');
+      setAdminServiceType('service_1');
+      setAdminAvgTime('2 minutes');
       setEditingServiceId(null);
       haptic('success');
     } catch (err: any) {
@@ -3602,6 +4022,8 @@ export default function App() {
     setAdminMax(String(svc.max || '100000'));
     setAdminDesc(svc.desc || '');
     setAdminApiServiceId(svc.apiServiceId || '');
+    setAdminServiceType((svc.serviceType as any) || 'service_1');
+    setAdminAvgTime(svc.avgTime || '2 minutes');
     haptic('light');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -4243,21 +4665,6 @@ export default function App() {
                   <i className="fas fa-search text-sm text-blue-400"></i>
                 </button>
 
-                {/* Live 3D Theme & Welcome Button (controlled by admin) */}
-                {welcomeConfig.show3DButton !== false && (
-                  <button
-                    onClick={() => {
-                      setShow3DThemeModal(true);
-                      haptic('heavy');
-                    }}
-                    className="relative w-10 h-10 bg-gradient-to-b from-cyan-500/20 to-cyan-950/50 border border-cyan-400/50 hover:border-cyan-300 rounded-2xl flex items-center justify-center text-cyan-300 cursor-pointer active:scale-90 transition-all duration-200 shadow-[0_4px_15px_rgba(56,189,248,0.3)] hover:shadow-[0_0_22px_rgba(56,189,248,0.5)] backdrop-blur-md"
-                    title="3D Live Theme & Welcome (3D থিম ও অ্যানিমেশন)"
-                  >
-                    <i className="fas fa-cube text-sm text-cyan-300 animate-spin" style={{ animationDuration: '8s' }}></i>
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping"></span>
-                  </button>
-                )}
-
                 {/* Notifications Button */}
                 <button
                   onClick={() => {
@@ -4380,8 +4787,15 @@ export default function App() {
 
             {/* LIVE ANNOUNCEMENT TICKER (controlled by admin) */}
             {welcomeConfig.showNoticeTicker !== false && (
-              <div className="mt-3 relative z-10 overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900/90 via-slate-900/80 to-slate-900/90 border border-amber-500/30 p-2.5 flex items-center gap-2.5 shadow-lg backdrop-blur-md">
-                <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-xl border border-amber-500/40 whitespace-nowrap shadow-sm">
+              <div
+                onClick={() => {
+                  setShowAnnouncementModal(true);
+                  haptic('light');
+                }}
+                className="mt-3 relative z-10 overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-900/95 border border-amber-500/40 hover:border-amber-400 p-2.5 flex items-center gap-2.5 shadow-lg backdrop-blur-md cursor-pointer transition active:scale-[0.99] group"
+                title="সম্পূর্ণ নোটিশ দেখতে ক্লিক করুন"
+              >
+                <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-xl border border-amber-500/40 whitespace-nowrap shadow-sm group-hover:bg-amber-500/35 transition">
                   <i className="fas fa-bullhorn text-amber-400 text-xs animate-bounce"></i>
                   <span>নোটিশ</span>
                 </div>
@@ -4389,6 +4803,10 @@ export default function App() {
                   <p className="text-[11px] font-semibold text-slate-200 inline-block animate-marquee">
                     {welcomeConfig.noticeText || '⚡ ২৪/৭ ইনস্ট্যান্ট সার্ভিস সক্রিয় | বিকাশ, নগদ, রকেটে ইনস্ট্যান্ট ডিপোজিট বোনাস চলছে | যেকোনো প্রয়োজনে আমাদের লাইভ সাপোর্টে যোগাযোগ করুন 🚀'}
                   </p>
+                </div>
+                <div className="text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/30 whitespace-nowrap group-hover:text-white transition flex items-center gap-1">
+                  <span>দেখুন</span>
+                  <i className="fas fa-arrow-right text-[8px]"></i>
                 </div>
               </div>
             )}
@@ -4457,36 +4875,137 @@ export default function App() {
           {/* HOME TAB */}
           {activeTab === 'home' && (
             <section className="px-5 mt-5">
-              {/* 24/7 Live AI Support Banner */}
-              {welcomeConfig.aiSupportEnabled !== false && (
-                <div
-                  onClick={() => {
-                    setShowAISupportModal(true);
-                    haptic('heavy');
-                  }}
-                  className="mb-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/25 via-yellow-500/15 to-blue-950/40 border border-amber-500/40 hover:border-amber-400 transition-all duration-200 cursor-pointer shadow-[0_4px_20px_rgba(245,158,11,0.15)] flex items-center justify-between active:scale-[0.99] group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 text-black flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/30 group-hover:scale-105 transition">
-                      <i className="fas fa-robot"></i>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-extrabold text-xs text-white">২৪/৭ লাইভ AI সাপোর্ট সহকারী</h4>
-                        <span className="bg-emerald-500 text-black font-black text-[9px] px-1.5 py-0.2 rounded font-mono">
-                          ONLINE ⚡
-                        </span>
+              {/* HOME NOTICE BANNER (Controlled by Admin Panel) */}
+              {welcomeConfig.showNoticeBanner !== false && (
+                !isBannerDismissed ? (
+                  <div
+                    className={`mb-4 relative z-10 overflow-hidden rounded-2xl p-4 transition-all duration-300 shadow-xl border ${
+                      welcomeConfig.bannerTheme === 'blue'
+                        ? 'bg-gradient-to-br from-sky-950/90 via-slate-900/95 to-slate-950/95 border-sky-500/40 shadow-sky-500/10'
+                        : welcomeConfig.bannerTheme === 'emerald'
+                        ? 'bg-gradient-to-br from-emerald-950/90 via-slate-900/95 to-slate-950/95 border-emerald-500/40 shadow-emerald-500/10'
+                        : welcomeConfig.bannerTheme === 'rose'
+                        ? 'bg-gradient-to-br from-rose-950/90 via-slate-900/95 to-slate-950/95 border-rose-500/40 shadow-rose-500/10'
+                        : welcomeConfig.bannerTheme === 'purple'
+                        ? 'bg-gradient-to-br from-purple-950/90 via-slate-900/95 to-slate-950/95 border-purple-500/40 shadow-purple-500/10'
+                        : 'bg-gradient-to-br from-amber-950/90 via-slate-900/95 to-slate-950/95 border-amber-500/40 shadow-amber-500/10'
+                    }`}
+                  >
+                    {/* Background glow accent */}
+                    <div
+                      className={`absolute -right-8 -bottom-8 w-32 h-32 rounded-full blur-2xl pointer-events-none opacity-20 ${
+                        welcomeConfig.bannerTheme === 'blue' ? 'bg-sky-400' :
+                        welcomeConfig.bannerTheme === 'emerald' ? 'bg-emerald-400' :
+                        welcomeConfig.bannerTheme === 'rose' ? 'bg-rose-400' :
+                        welcomeConfig.bannerTheme === 'purple' ? 'bg-purple-400' :
+                        'bg-amber-400'
+                      }`}
+                    />
+
+                    {/* Banner Image / Poster (if uploaded or linked by admin) */}
+                    {welcomeConfig.bannerImageUrl && (
+                      <div className="mb-3 overflow-hidden rounded-xl border border-white/10 max-h-48 relative">
+                        <img
+                          src={welcomeConfig.bannerImageUrl}
+                          alt="Notice Poster"
+                          className="w-full h-auto max-h-48 object-cover rounded-xl"
+                        />
                       </div>
-                      <p className="text-[10px] text-amber-200/90 mt-0.5">
-                        ডিপোজিট, অর্ডার বা প্যানেল বিষয়ক যেকোনো প্রশ্ন করুন • ইনস্ট্যান্ট সমাধান পান
-                      </p>
+                    )}
+
+                    {/* Top Header Row: Badge, Title & Close */}
+                    <div className="flex items-start justify-between gap-2 relative z-10">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border font-mono flex items-center gap-1 ${
+                              welcomeConfig.bannerTheme === 'blue'
+                                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                : welcomeConfig.bannerTheme === 'emerald'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : welcomeConfig.bannerTheme === 'rose'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                : welcomeConfig.bannerTheme === 'purple'
+                                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            }`}
+                          >
+                            <i className="fas fa-bullhorn text-[8px] animate-bounce"></i>
+                            <span>{welcomeConfig.bannerBadge || 'SPECIAL NOTICE'}</span>
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            ⚡ LIVE NOTICE
+                          </span>
+                        </div>
+
+                        <h3 className="text-sm font-black text-white tracking-tight leading-snug">
+                          {welcomeConfig.bannerTitle || '📢 আর এফ এসএমএম প্যানেল অফিসিয়াল নোটিশ'}
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBannerDismissed(true);
+                          haptic('light');
+                        }}
+                        className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition text-xs cursor-pointer"
+                        title="লুকিয়ে রাখুন"
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
                     </div>
+
+                    {/* Detailed Message Body */}
+                    <p className="text-xs text-slate-300 mt-2 leading-relaxed whitespace-pre-line font-normal relative z-10">
+                      {welcomeConfig.bannerMessage || '⚡ ২৪/৭ ইনস্ট্যান্ট অটোমেটিক সার্ভিস সক্রিয়! বিকাশ, নগদ ও রকেটে ডিপোজিট স্বয়ংক্রিয়ভাবে সেকেন্ডে ব্যালেন্সে যুক্ত হয়। যেকোনো সোশ্যাল মিডিয়া অর্ডার ৫ মিনিটের মধ্যে শুরু হয়ে যায়!'}
+                    </p>
+
+                    {/* Action Button & Target */}
+                    {welcomeConfig.bannerActionText && (
+                      <div className="mt-3.5 flex items-center justify-between gap-3 pt-2.5 border-t border-white/10 relative z-10">
+                        <button
+                          type="button"
+                          onClick={() => handleBannerActionClick(welcomeConfig.bannerActionUrl)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md active:scale-95 transition cursor-pointer ${
+                            welcomeConfig.bannerTheme === 'blue'
+                              ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sky-500/25 hover:from-sky-400 hover:to-blue-500'
+                              : welcomeConfig.bannerTheme === 'emerald'
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-emerald-500/25 hover:from-emerald-400 hover:to-teal-400'
+                              : welcomeConfig.bannerTheme === 'rose'
+                              ? 'bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-rose-500/25 hover:from-rose-400 hover:to-red-500'
+                              : welcomeConfig.bannerTheme === 'purple'
+                              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-purple-500/25 hover:from-purple-400 hover:to-indigo-500'
+                              : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-amber-500/25 hover:from-amber-400 hover:to-yellow-400'
+                          }`}
+                        >
+                          <span>{welcomeConfig.bannerActionText}</span>
+                          <i className="fas fa-arrow-right text-[10px]"></i>
+                        </button>
+
+                        {welcomeConfig.bannerActionUrl && (
+                          <span className="text-[10px] text-slate-400 truncate max-w-[150px] font-mono">
+                            {welcomeConfig.bannerActionUrl.replace('https://', '')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 text-amber-400 text-xs font-black bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/30 group-hover:bg-amber-500 group-hover:text-black transition">
-                    <span>চ্যাট শুরু</span>
-                    <i className="fas fa-arrow-right text-[9px]"></i>
+                ) : (
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBannerDismissed(false);
+                        haptic('light');
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-[10px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <i className="fas fa-bullhorn text-amber-400 text-xs"></i>
+                      <span>📢 নোটিশ ব্যানার দেখুন</span>
+                    </button>
                   </div>
-                </div>
+                )
               )}
 
               {/* SEARCH BAR TRIGGER */}
@@ -4509,35 +5028,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* REFERRAL & 5% DEPOSIT BONUS BANNER */}
-              <div
-                onClick={() => {
-                  setShowReferralModal(true);
-                  haptic('heavy');
-                }}
-                className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-600/10 to-slate-900 border border-amber-500/40 hover:border-amber-400/80 transition-all duration-200 cursor-pointer active:scale-[0.99] shadow-[0_4px_20px_rgba(245,158,11,0.15)] flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/25 border border-amber-500/40 flex items-center justify-center text-amber-300 text-base group-hover:scale-110 transition shadow-inner">
-                    <i className="fas fa-hand-holding-dollar"></i>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-black text-xs text-white">রেফারেল বোনাস ({referralConfig.bonusPercent || 10}% প্রতি ডিপোজিটে)</h4>
-                      <span className="bg-emerald-500 text-black font-black text-[9px] px-1.5 py-0.2 rounded-md">
-                        +{referralConfig.bonusPercent || 10}% BONUS
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-amber-200/80 mt-0.5">
-                      বন্ধুকে রেফার করুন, বন্ধু যেকোনো এমাউন্ট ডিপোজিট করলেই আপনি পাবেন {referralConfig.bonusPercent || 10}% ক্যাশ বোনাস!
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-amber-400 text-[11px] font-black bg-amber-500/15 px-2.5 py-1.5 rounded-xl border border-amber-500/30 group-hover:bg-amber-500 group-hover:text-black transition shrink-0">
-                  <span>রেফার</span>
-                  <i className="fas fa-arrow-right text-[8px]"></i>
-                </div>
-              </div>
               {/* SOCIAL PLATFORMS SELECTOR GRID */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2.5 px-1">
@@ -4671,6 +5161,28 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
+                  {/* Top Mode Header matching Screenshot (New Order | Mass Order) */}
+                  <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+                    <button
+                      type="button"
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <i className="fas fa-shopping-cart text-[10px]"></i>
+                      <span>New Order</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showToast('Mass Order মোড শীঘ্রই আসছে!', 'info');
+                        haptic('light');
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/60 transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <i className="fas fa-layer-group text-[10px]"></i>
+                      <span>Mass Order</span>
+                    </button>
+                  </div>
+
                   {/* Category Dropdown */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -4706,8 +5218,14 @@ export default function App() {
 
                   {/* Service Dropdown */}
                   <div>
-                    <label className="form-label">
-                      <i className="fas fa-magic mr-1 text-[8px]"></i> 2. Service
+                    <label className="form-label flex items-center justify-between">
+                      <span><i className="fas fa-magic mr-1 text-[8px]"></i> 2. Service</span>
+                      {isCurrentService2 && (
+                        <span className="text-[9px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <i className="fas fa-comments text-[8px]"></i>
+                          <span>Service 2 (Custom Comments)</span>
+                        </span>
+                      )}
                     </label>
                     <div className="relative">
                       <select
@@ -4774,12 +5292,12 @@ export default function App() {
                   {/* Target Link Input */}
                   <div>
                     <label className="form-label">
-                      <i className="fas fa-link mr-1 text-[8px]"></i> 3. Target Link
+                      <i className="fas fa-link mr-1 text-[8px]"></i> 3. Link
                     </label>
                     <input
                       type="text"
                       className="input-modern"
-                      placeholder="https://facebook.com/username or link..."
+                      placeholder="https://..."
                       value={targetLink}
                       onChange={(e) => {
                         setTargetLink(e.target.value);
@@ -4806,8 +5324,8 @@ export default function App() {
                       />
                       {currentService && (
                         <p className="min-max-hint">
-                          Min: {currentService.min} — Max:{' '}
-                          {currentService.max?.toLocaleString() || '∞'}
+                          Min: {currentService.min} - Max:{' '}
+                          {currentService.max?.toLocaleString() || '100 000'}
                         </p>
                       )}
                       {qtyErr && <p className="field-error show">{qtyErr}</p>}
@@ -4815,7 +5333,7 @@ export default function App() {
 
                     <div>
                       <label className="form-label">
-                        <i className="fas fa-coins mr-1 text-[8px]"></i> 5. Cost (BDT / ৳)
+                        <i className="fas fa-coins mr-1 text-[8px]"></i> 5. Charge (BDT / ৳)
                       </label>
                       <div className="bg-gradient-to-br from-blue-950/40 via-slate-900/90 to-slate-900/90 border border-blue-500/30 rounded-2xl p-3 text-center shadow-inner">
                         <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-white drop-shadow">
@@ -4835,6 +5353,81 @@ export default function App() {
                           </span>
                         )}
                       </p>
+                    </div>
+                  </div>
+
+                  {/* Service 2: Custom Comments Field (as in Screenshot) */}
+                  {isCurrentService2 && (
+                    <div className="space-y-1.5 p-3.5 rounded-2xl bg-gradient-to-b from-amber-500/10 via-slate-900/90 to-slate-900/95 border border-amber-500/30 shadow-lg animate-in fade-in duration-300">
+                      <div className="flex items-center justify-between">
+                        <label className="form-label mb-0 text-slate-200 font-bold flex items-center gap-1.5 text-xs">
+                          <i className="fas fa-comments text-amber-400 text-xs"></i>
+                          <span>Comments (1 per line)</span>
+                        </label>
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono font-bold flex items-center gap-1">
+                          <i className="fas fa-list-ol text-[8px]"></i>
+                          <span>{customComments.split('\n').filter((l) => l.trim().length > 0).length} lines</span>
+                        </span>
+                      </div>
+
+                      <textarea
+                        className="input-modern w-full h-32 py-2.5 px-3 font-mono text-xs rounded-xl border border-white/10 bg-slate-950/90 text-slate-100 placeholder-slate-500 focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/40 resize-y leading-relaxed"
+                        placeholder="Awesome video! ❤️&#10;Great content keep it up 🔥&#10;Very informative!&#10;(প্রতি লাইনে ১টি করে কমেন্ট লিখুন)"
+                        value={customComments}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomComments(val);
+                          setCommentsErr('');
+                          const lines = val.split('\n').filter((l) => l.trim().length > 0);
+                          if (lines.length > 0) {
+                            setQuantity(lines.length);
+                            setQtyErr('');
+                          }
+                        }}
+                      />
+
+                      {commentsErr && <p className="field-error show">{commentsErr}</p>}
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5 px-1">
+                        <span className="flex items-center gap-1">
+                          <i className="fas fa-lightbulb text-amber-400/80"></i>
+                          <span>প্রতি লাইনে একটি করে আলাদা কমেন্ট লিখুন</span>
+                        </span>
+                        <span className="text-amber-400/90 font-mono font-semibold">
+                          লাইন অনুযায়ী কোয়ান্টিটি হবে
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Average Time Display (matching Screenshot) */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <span>Average time</span>
+                        <i
+                          className="fas fa-info-circle text-slate-400 text-[11px] cursor-help"
+                          title="Average time taken to deliver this service"
+                        ></i>
+                      </label>
+                      {isCurrentService2 && (
+                        <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <i className="fas fa-bolt text-[8px]"></i>
+                          <span>Instant Start</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-full bg-slate-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs text-slate-200">
+                      <span className="font-semibold flex items-center gap-2">
+                        <i className="fas fa-clock text-blue-400 text-xs"></i>
+                        <span className="font-medium text-slate-200">
+                          {currentService?.avgTime || '2 minutes'}
+                        </span>
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <i className="fas fa-check-circle text-[9px]"></i>
+                        <span>High Speed</span>
+                      </span>
                     </div>
                   </div>
 
@@ -4939,6 +5532,24 @@ export default function App() {
                         <p className="text-[10px] text-slate-400 truncate mt-0.5 font-mono">
                           {o.link}
                         </p>
+
+                        {o.comments && (
+                          <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left">
+                            <div className="flex items-center justify-between text-[10px] text-amber-300 font-bold mb-1">
+                              <span className="flex items-center gap-1">
+                                <i className="fas fa-comments text-[9px]"></i>
+                                <span>Custom Comments</span>
+                              </span>
+                              <span className="text-[9px] font-mono bg-amber-500/20 px-1.5 py-0.5 rounded">
+                                {o.comments.split('\n').filter((l: string) => l.trim().length > 0).length} lines
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-300 font-mono max-h-16 overflow-y-auto whitespace-pre-wrap leading-relaxed bg-black/40 p-1.5 rounded-lg border border-white/5">
+                              {o.comments}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="dashed-divider my-3"></div>
                         <div className="flex justify-between items-center">
                           <div>
@@ -7354,6 +7965,17 @@ export default function App() {
 
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
+                      onClick={() => {
+                        setAdminSubTab('announcement');
+                        haptic('light');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-xs font-black text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.4)] flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                    >
+                      <i className="fas fa-crown"></i>
+                      <span>👑 Announcement Popup</span>
+                    </button>
+                    <button
                       onClick={handleExportBackup}
                       className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-white/10 flex items-center gap-1.5 transition active:scale-95"
                     >
@@ -7390,13 +8012,14 @@ export default function App() {
               <div className="flex overflow-x-auto gap-2 p-1.5 bg-slate-900/90 rounded-2xl border border-white/10 mb-5 scrollbar-none">
                 {[
                   { id: 'users', label: 'Users & Balance', icon: 'fas fa-users' },
+                  { id: 'announcement', label: '👑 Announcement Popup (অ্যানাউন্সমেন্ট)', icon: 'fas fa-crown' },
+                  { id: 'notifications', label: '📢 নোটিশ ব্যানার (Notice Banner)', icon: 'fas fa-bullhorn' },
                   { id: 'referrals', label: 'Referral 5% Bonus (রেফারেল)', icon: 'fas fa-gift' },
                   { id: 'payment', label: 'Payment Numbers', icon: 'fas fa-mobile-alt' },
                   { id: 'deposits', label: 'Deposit Requests', icon: 'fas fa-wallet' },
                   { id: 'orders', label: 'Orders Control', icon: 'fas fa-list-check' },
                   { id: 'services', label: 'Services (API)', icon: 'fas fa-server' },
                   { id: 'welcome', label: '3D ভয়েস ও মেসেজ', icon: 'fas fa-volume-up' },
-                  { id: 'notifications', label: 'Broadcast', icon: 'fas fa-bullhorn' },
                   { id: 'links', label: 'Support Links', icon: 'fas fa-link' },
                   { id: 'settings', label: 'Site Logo & Settings (লোগো ও সেটিংস)', icon: 'fas fa-cog' },
                   { id: 'support', label: 'Live AI & Chat Support (লাইভ ইনবক্স)', icon: 'fas fa-headset' },
@@ -8335,6 +8958,23 @@ export default function App() {
                         <h4 className="font-extrabold text-xs text-white leading-snug">{o.service}</h4>
                         <p className="text-[10px] text-slate-400 font-mono truncate">{o.link}</p>
 
+                        {o.comments && (
+                          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left space-y-1">
+                            <div className="flex items-center justify-between text-[10px] text-amber-300 font-bold">
+                              <span className="flex items-center gap-1">
+                                <i className="fas fa-comments text-[9px]"></i>
+                                <span>Custom Comments (Service 2)</span>
+                              </span>
+                              <span className="text-[9px] font-mono bg-amber-500/20 px-1.5 py-0.5 rounded">
+                                {o.comments.split('\n').filter((l: string) => l.trim().length > 0).length} lines
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-200 font-mono max-h-20 overflow-y-auto whitespace-pre-wrap leading-relaxed bg-black/50 p-2 rounded-lg border border-white/5">
+                              {o.comments}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex justify-between items-center pt-2 border-t border-white/5">
                           <div className="text-xs">
                             <span className="text-slate-400">Qty: {o.qty?.toLocaleString()} | </span>
@@ -8376,7 +9016,7 @@ export default function App() {
                   {/* Service Add/Edit Form Card */}
                   <div className="glass-card p-4 space-y-3">
                     <h3 className="font-extrabold text-xs text-white flex items-center justify-between">
-                      <span>{editingServiceId ? 'Edit Service' : 'Add New Service (SMMGen API)'}</span>
+                      <span>{editingServiceId ? 'Edit Service' : 'Add New Service (SMMGen API / Service 2)'}</span>
                       {editingServiceId && (
                         <button
                           onClick={() => {
@@ -8385,6 +9025,8 @@ export default function App() {
                             setAdminCategory('');
                             setAdminPrice('');
                             setAdminApiServiceId('');
+                            setAdminServiceType('service_1');
+                            setAdminAvgTime('2 minutes');
                           }}
                           className="text-[10px] text-red-400 hover:underline"
                         >
@@ -8393,13 +9035,71 @@ export default function App() {
                       )}
                     </h3>
 
+                    {/* Service Type Selector: Service 1 vs Service 2 (Custom Comments) */}
+                    <div className="p-2.5 rounded-xl bg-slate-900/90 border border-white/10 space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <i className="fas fa-layer-group text-blue-400 text-xs"></i>
+                          <span>Service Type (সার্ভিস টাইপ)</span>
+                        </span>
+                        {adminServiceType === 'service_2' ? (
+                          <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            Service 2: Custom Comments
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/30">
+                            Service 1: Standard
+                          </span>
+                        )}
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminServiceType('service_1');
+                            haptic('light');
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                            adminServiceType === 'service_1'
+                              ? 'bg-blue-600/25 border-blue-500 text-white shadow-sm'
+                              : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <div className="font-bold text-xs flex items-center gap-1.5">
+                            <i className="fas fa-hashtag text-blue-400 text-[10px]"></i>
+                            <span>Service 1 (Standard)</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">সাধারণ লিঙ্ক ও কোয়ান্টিটি অর্ডার</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminServiceType('service_2');
+                            haptic('light');
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                            adminServiceType === 'service_2'
+                              ? 'bg-amber-600/25 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/50'
+                              : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <div className="font-bold text-xs flex items-center gap-1.5 text-amber-300">
+                            <i className="fas fa-comments text-amber-400 text-[10px]"></i>
+                            <span>Service 2 (Comments)</span>
+                          </div>
+                          <p className="text-[10px] text-amber-200/70 mt-0.5">হোম পেইজে কাস্টম কমেন্ট ফিল্ড আসবে</p>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="form-label">Service Name</label>
                         <input
                           type="text"
                           className="input-modern text-xs"
-                          placeholder="e.g. Facebook Likes [Instant]"
+                          placeholder="e.g. TikTok Custom Comments [Service 2]"
                           value={adminName}
                           onChange={(e) => setAdminName(e.target.value)}
                         />
@@ -8409,7 +9109,7 @@ export default function App() {
                         <input
                           type="text"
                           className="input-modern text-xs"
-                          placeholder="e.g. Facebook"
+                          placeholder="e.g. TikTok Comments"
                           value={adminCategory}
                           onChange={(e) => setAdminCategory(e.target.value)}
                         />
@@ -8448,6 +9148,32 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Average Delivery Time & Max Qty */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="form-label flex items-center gap-1">
+                          <i className="fas fa-clock text-blue-400 text-[10px]"></i>
+                          <span>Average Time</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="input-modern text-xs"
+                          placeholder="e.g. 2 minutes"
+                          value={adminAvgTime}
+                          onChange={(e) => setAdminAvgTime(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="form-label">Max Qty</label>
+                        <input
+                          type="number"
+                          className="input-modern text-xs"
+                          value={adminMax}
+                          onChange={(e) => setAdminMax(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
                     <button
                       onClick={handleSaveServiceManual}
                       disabled={adminSubmitting}
@@ -8466,52 +9192,1048 @@ export default function App() {
 
                   {/* Existing Services List */}
                   <div className="space-y-2">
-                    {allServices.map((svc, svcIdx) => (
-                      <div key={`${svc.id || 'svc'}-${svcIdx}`} className="p-3 bg-slate-900/80 border border-white/10 rounded-2xl flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded">
-                              {svc.category}
-                            </span>
-                            <span className="text-[9px] font-mono text-slate-400">ID: {svc.id}</span>
+                    {allServices.map((svc, svcIdx) => {
+                      const isSvc2 = svc.serviceType === 'service_2' || svc.serviceType === 'custom_comments' || svc.name.toLowerCase().includes('custom comment');
+                      return (
+                        <div key={`${svc.id || 'svc'}-${svcIdx}`} className="p-3 bg-slate-900/80 border border-white/10 rounded-2xl flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[9px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded">
+                                {svc.category}
+                              </span>
+                              {isSvc2 ? (
+                                <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                                  <i className="fas fa-comments text-[8px]"></i>
+                                  <span>Service 2 (Comments)</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">
+                                  Service 1 (Standard)
+                                </span>
+                              )}
+                              <span className="text-[9px] font-mono text-slate-400">ID: {svc.id}</span>
+                            </div>
+                            <h4 className="font-extrabold text-xs text-white mt-1">{svc.name}</h4>
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-0.5">
+                              <span className="text-emerald-400 font-bold">৳ {svc.price} / 1k</span>
+                              <span>•</span>
+                              <span>Avg: {svc.avgTime || '2 minutes'}</span>
+                              <span>•</span>
+                              <span>Min: {svc.min}</span>
+                            </div>
                           </div>
-                          <h4 className="font-extrabold text-xs text-white mt-1">{svc.name}</h4>
-                          <p className="text-[10px] text-emerald-400 font-bold">৳ {svc.price} / 1k</p>
-                        </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              setEditingServiceId(svc.id);
-                              setAdminName(svc.name);
-                              setAdminCategory(svc.category);
-                              setAdminPrice(String(svc.price));
-                              setAdminMin(String(svc.min));
-                              setAdminMax(String(svc.max || 100000));
-                              setAdminDesc(svc.desc || '');
-                              setAdminApiServiceId(svc.apiServiceId || '');
-                            }}
-                            className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center text-xs"
-                          >
-                            <i className="fas fa-edit"></i>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteService(svc.id, svc.name)}
-                            className="w-7 h-7 rounded-lg bg-red-500/20 text-red-300 flex items-center justify-center text-xs"
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingServiceId(svc.id);
+                                setAdminName(svc.name);
+                                setAdminCategory(svc.category);
+                                setAdminPrice(String(svc.price));
+                                setAdminMin(String(svc.min));
+                                setAdminMax(String(svc.max || 100000));
+                                setAdminDesc(svc.desc || '');
+                                setAdminApiServiceId(svc.apiServiceId || '');
+                                setAdminServiceType((svc.serviceType as any) || (isSvc2 ? 'service_2' : 'service_1'));
+                                setAdminAvgTime(svc.avgTime || '2 minutes');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center text-xs cursor-pointer hover:bg-blue-500/30"
+                              title="Edit Service"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteService(svc.id, svc.name)}
+                              className="w-7 h-7 rounded-lg bg-red-500/20 text-red-300 flex items-center justify-center text-xs cursor-pointer hover:bg-red-500/30"
+                              title="Delete Service"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* SUB TAB 5: BROADCAST & LIVE NOTICE TICKER */}
+              {/* SUB TAB: ANNOUNCEMENT POPUP CONTROLS (MATCHING USER SCREENSHOT) */}
+              {adminSubTab === 'announcement' && (
+                <div className="space-y-5 animate-fade-in">
+                  {/* Top Bar Card */}
+                  <div className="glass-card p-5 space-y-4 border border-amber-500/40 bg-gradient-to-br from-slate-900/95 via-amber-950/30 to-slate-900/95 shadow-[0_4px_30px_rgba(245,158,11,0.18)] rounded-2xl">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-500 to-amber-300 flex items-center justify-center text-slate-950 text-xl font-black shadow-lg shadow-amber-500/30">
+                          <i className="fas fa-crown"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-black text-sm text-white flex items-center gap-2 flex-wrap">
+                            <span>👑 Announcement Popup কন্ট্রোল প্যানেল</span>
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-mono">
+                              SCREEN ENTRY POPUP
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-slate-400">
+                            অ্যাপে ইউজার প্রবেশ করলেই এই রাজকীয় পপআপটি ভেসে উঠবে। ছবি, টেক্সট ও মাল্টিপল স্লাইড নিয়ন্ত্রণ করুন।
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Live Modal Preview Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAnnouncementModal(true);
+                            haptic('light');
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-xs font-black text-slate-950 flex items-center gap-1.5 transition active:scale-95 shadow-md shadow-amber-500/20 cursor-pointer"
+                        >
+                          <i className="fas fa-eye"></i>
+                          <span>লাইভ পপআপ টেস্ট</span>
+                        </button>
+
+                        {/* Master Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => handleQuickToggleFeature('showNoticeBanner', !welcomeConfig.showNoticeBanner)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer border ${
+                            welcomeConfig.showNoticeBanner !== false
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                              : 'bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30'
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              welcomeConfig.showNoticeBanner !== false ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
+                            }`}
+                          ></span>
+                          <span>
+                            {welcomeConfig.showNoticeBanner !== false ? 'পপআপ সক্রিয় (ON)' : 'পপআপ বন্ধ (OFF)'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Quick Stat info */}
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 bg-white/5 p-2.5 rounded-xl border border-white/5 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <i className="fas fa-info-circle text-amber-400"></i>
+                        <span>মোট স্লাইড সংখ্যা: <strong className="text-white">{announcementSlides.length}</strong> টি</span>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-[10px]">
+                        <span>স্বয়ংক্রিয় ডিসপ্লে: সাইটে প্রবেশের ৮০০ms পর</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main 2-Column Layout: Visual Mockup on Left / Full Slide Editor on Right */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    {/* LEFT COLUMN: VISUAL INTERACTIVE MOCKUP (Matching Screenshot) */}
+                    <div className="lg:col-span-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-200 flex items-center gap-1.5">
+                          <i className="fas fa-mobile-alt text-amber-400"></i>
+                          <span>রিয়েল-টাইম লাইভ প্রিভিউ (Mockup)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Slide {activeSlideIndex + 1} of {announcementSlides.length}
+                        </span>
+                      </div>
+
+                      {/* Mockup Card (Replicating exact look of screenshot) */}
+                      <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-amber-400/30 bg-gradient-to-b from-slate-900 via-slate-950 to-black p-4 space-y-3">
+                        {/* Crown Header with Ribbon */}
+                        <div className="relative flex flex-col items-center justify-center pt-2">
+                          <div className="relative flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-400 via-yellow-300 to-amber-500 p-0.5 shadow-lg shadow-amber-500/40 flex items-center justify-center">
+                              <i className="fas fa-crown text-slate-950 text-xl"></i>
+                            </div>
+                            {/* Gold Coin sparkles */}
+                            <span className="absolute -left-3 top-2 text-amber-300 text-xs">✨</span>
+                            <span className="absolute -right-3 top-2 text-amber-300 text-xs">🪙</span>
+                          </div>
+
+                          {/* Announcement Ribbon */}
+                          <div className="mt-1 px-4 py-0.5 bg-gradient-to-r from-blue-700 via-sky-600 to-blue-700 text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow border border-sky-400/40">
+                            {announcementSlides[activeSlideIndex]?.badge || 'Announcement'}
+                          </div>
+                        </div>
+
+                        {/* Poster Image Container */}
+                        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-950 min-h-[140px] max-h-[180px] flex items-center justify-center">
+                          {announcementSlides[activeSlideIndex]?.imageUrl ? (
+                            <img
+                              src={announcementSlides[activeSlideIndex]?.imageUrl}
+                              alt="Poster Preview"
+                              className="w-full h-full object-cover max-h-[180px]"
+                            />
+                          ) : (
+                            <div className="p-4 text-center space-y-1">
+                              <i className="fas fa-image text-slate-600 text-2xl"></i>
+                              <div className="text-[10px] text-slate-400">কোনো ছবি সিলেক্ট করা নেই (অপশনাল)</div>
+                              <div className="text-[9px] text-amber-400 font-bold">ডিফল্ট গ্রেডিয়েন্ট পোস্টার দেখানো হবে</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Clean White Card (Matching Screenshot White Content Box) */}
+                        <div className="bg-white rounded-2xl p-4 text-slate-900 shadow-inner space-y-2 border border-slate-200">
+                          <h4 className="text-center font-black text-xs sm:text-sm text-slate-900 leading-snug">
+                            {announcementSlides[activeSlideIndex]?.title || '🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻'}
+                          </h4>
+                          <p className="text-[11px] text-slate-700 leading-relaxed text-center whitespace-pre-line">
+                            {announcementSlides[activeSlideIndex]?.message ||
+                              '🙇 সাম্প্রতিক লেনদেনে বিলম্বের কারণে সৃষ্ট অসুবিধার জন্য আমরা আন্তরিকভাবে ক্ষমা চেয়ে নিচ্ছি...'}
+                          </p>
+
+                          {announcementSlides[activeSlideIndex]?.actionText && (
+                            <div className="pt-2 text-center">
+                              <span className="inline-block px-3 py-1 bg-amber-500 text-slate-950 font-black text-[10px] rounded-lg shadow-sm">
+                                {announcementSlides[activeSlideIndex]?.actionText}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dual Golden Rounded Buttons (Matching Screenshot Previous / Next) */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlideIndex(
+                                (prev) => (prev - 1 + announcementSlides.length) % announcementSlides.length
+                              );
+                              haptic('light');
+                            }}
+                            className="py-2.5 px-3 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black text-xs shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                          >
+                            <i className="fas fa-chevron-left text-[10px]"></i>
+                            <span>Previous</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlideIndex((prev) => (prev + 1) % announcementSlides.length);
+                              haptic('light');
+                            }}
+                            className="py-2.5 px-3 rounded-full bg-gradient-to-r from-yellow-500 to-amber-400 hover:from-yellow-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                          >
+                            <span>Next</span>
+                            <i className="fas fa-chevron-right text-[10px]"></i>
+                          </button>
+                        </div>
+
+                        {/* Slide Dots */}
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
+                          {announcementSlides.map((_, dotIdx) => (
+                            <button
+                              key={`mock-dot-${dotIdx}`}
+                              onClick={() => setActiveSlideIndex(dotIdx)}
+                              className={`h-1.5 rounded-full transition-all ${
+                                activeSlideIndex === dotIdx ? 'w-5 bg-amber-400' : 'w-1.5 bg-white/30'
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Bottom text */}
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-1">
+                          <label className="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" disabled checked className="w-3 h-3 rounded" />
+                            <span>আজ আর দেখাবেন না</span>
+                          </label>
+                          <span className="text-slate-500 hover:text-slate-300 cursor-pointer">বন্ধ করুন</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: SLIDE MANAGEMENT & EDITING FORM */}
+                    <div className="lg:col-span-7 space-y-4">
+                      {/* Slide Tabs Navigation */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                          {announcementSlides.map((slide, idx) => (
+                            <button
+                              key={slide.id || `tab-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                setActiveSlideIndex(idx);
+                                haptic('light');
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                                activeSlideIndex === idx
+                                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                                  : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10'
+                              }`}
+                            >
+                              <i className="fas fa-file-alt text-[10px]"></i>
+                              <span>স্লাইড {idx + 1}</span>
+                              {idx === 0 && <span className="text-[9px] bg-slate-950/20 px-1 rounded">ডিফল্ট</span>}
+                            </button>
+                          ))}
+
+                          {/* Add New Slide Button */}
+                          <button
+                            type="button"
+                            onClick={handleAddAnnouncementSlide}
+                            className="px-3 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-black flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                          >
+                            <i className="fas fa-plus"></i>
+                            <span>নতুন স্লাইড</span>
+                          </button>
+                        </div>
+
+                        {/* Delete Slide Button */}
+                        {announcementSlides.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAnnouncementSlide(activeSlideIndex)}
+                            className="px-2.5 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <i className="fas fa-trash text-[10px]"></i>
+                            <span>এই স্লাইড মুছুন</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Active Slide Form Fields */}
+                      <div className="glass-card p-4 space-y-3.5 border border-white/10 rounded-2xl bg-slate-900/80">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                          <h4 className="text-xs font-black text-white flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs">
+                              {activeSlideIndex + 1}
+                            </span>
+                            <span>স্লাইড {activeSlideIndex + 1} এর বিস্তারিত তথ্য</span>
+                          </h4>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            ID: {announcementSlides[activeSlideIndex]?.id || `slide-${activeSlideIndex + 1}`}
+                          </span>
+                        </div>
+
+                        {/* Row: Badge & Theme */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="form-label text-slate-300 font-bold text-xs">
+                              টপ রিবন ব্যাজ (Top Ribbon Badge)
+                            </label>
+                            <input
+                              type="text"
+                              className="input-modern text-xs text-white"
+                              placeholder="যেমন: ANNOUNCEMENT বা জরুরি নোটিশ"
+                              value={announcementSlides[activeSlideIndex]?.badge || ''}
+                              onChange={(e) => handleUpdateCurrentSlide('badge', e.target.value)}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="form-label text-slate-300 font-bold text-xs">
+                              থিম স্টাইল (Theme Accent)
+                            </label>
+                            <select
+                              className="input-modern text-xs text-white bg-slate-800"
+                              value={announcementSlides[activeSlideIndex]?.theme || 'amber'}
+                              onChange={(e) => handleUpdateCurrentSlide('theme', e.target.value)}
+                            >
+                              <option value="amber">👑 রয়্যাল অ্যাম্বার গোল্ড (Royal Gold)</option>
+                              <option value="blue">💎 স্কাই ব্লু (Sky Blue)</option>
+                              <option value="emerald">🍀 এমারেল্ড গ্রিন (Emerald Green)</option>
+                              <option value="purple">🔮 রয়্যাল পার্পল (Royal Purple)</option>
+                              <option value="rose">🌹 রোজ রেড (Rose Red)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Slide Title */}
+                        <div>
+                          <label className="form-label text-slate-300 font-bold text-xs flex items-center justify-between">
+                            <span>স্লাইড শিরোনাম (Title / Headline)</span>
+                            <span className="text-[10px] text-amber-400 font-mono">যেমন: 🔻 কৃতজ্ঞতা বার্তা 🔻</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="input-modern text-xs text-white"
+                            placeholder="যেমন: 🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻"
+                            value={announcementSlides[activeSlideIndex]?.title || ''}
+                            onChange={(e) => handleUpdateCurrentSlide('title', e.target.value)}
+                          />
+                        </div>
+
+                        {/* Slide Message */}
+                        <div>
+                          <label className="form-label text-slate-300 font-bold text-xs flex items-center justify-between">
+                            <span>স্লাইড বার্তা (Body Message)</span>
+                            <span className="text-[10px] text-slate-400">একাধিক প্যারাগ্রাফ ও ইমোজি সাপোর্ট করে</span>
+                          </label>
+                          <textarea
+                            rows={3}
+                            className="input-modern text-xs text-white resize-none"
+                            placeholder="এখানে নোটিশ বিস্তারিত লিখুন..."
+                            value={announcementSlides[activeSlideIndex]?.message || ''}
+                            onChange={(e) => handleUpdateCurrentSlide('message', e.target.value)}
+                          />
+                        </div>
+
+                        {/* Poster Image (File Upload & URL) */}
+                        <div>
+                          <label className="form-label text-slate-300 font-bold text-xs flex items-center justify-between">
+                            <span>পোস্টার বা ব্যানার ছবি (Poster Image)</span>
+                            <span className="text-[10px] text-slate-400">স্ক্রিনশটের মতো গ্রাফিক্স ব্যানার</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <label className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-200 hover:text-white transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                              <i className="fas fa-upload text-amber-400"></i>
+                              <span>
+                                {announcementImageUploading ? 'ছবি আপলোড হচ্ছে...' : 'ডিভাইস থেকে ছবি আপলোড'}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleAnnouncementSlideImageUpload}
+                                disabled={announcementImageUploading}
+                              />
+                            </label>
+
+                            <input
+                              type="text"
+                              className="input-modern text-xs text-white"
+                              placeholder="অথবা ছবির URL পেস্ট করুন (https://...)"
+                              value={announcementSlides[activeSlideIndex]?.imageUrl || ''}
+                              onChange={(e) => handleUpdateCurrentSlide('imageUrl', e.target.value)}
+                            />
+                          </div>
+
+                          {/* Image Thumbnail Preview & Remove */}
+                          {announcementSlides[activeSlideIndex]?.imageUrl && (
+                            <div className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <img
+                                  src={announcementSlides[activeSlideIndex]?.imageUrl}
+                                  alt="Slide Preview"
+                                  className="w-12 h-10 object-cover rounded-lg border border-white/10"
+                                />
+                                <span className="text-[10px] text-slate-300 truncate max-w-[200px] font-mono">
+                                  {announcementSlides[activeSlideIndex]?.imageUrl?.startsWith('data:')
+                                    ? 'আপলোডকৃত ছবি ফাইল'
+                                    : announcementSlides[activeSlideIndex]?.imageUrl}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCurrentSlide('imageUrl', '')}
+                                className="px-2 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <i className="fas fa-trash text-[9px]"></i>
+                                <span>মুছুন</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Button & Link */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="form-label text-slate-300 font-bold text-xs">
+                              কল টু অ্যাকশন বাটন টেক্সট (Action Button)
+                            </label>
+                            <input
+                              type="text"
+                              className="input-modern text-xs text-white"
+                              placeholder="যেমন: টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡"
+                              value={announcementSlides[activeSlideIndex]?.actionText || ''}
+                              onChange={(e) => handleUpdateCurrentSlide('actionText', e.target.value)}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="form-label text-slate-300 font-bold text-xs">
+                              বাটন অ্যাকশন লিংক (Target URL)
+                            </label>
+                            <input
+                              type="text"
+                              className="input-modern text-xs text-white"
+                              placeholder="যেমন: https://t.me/RF2_SMM অথবা #deposit"
+                              value={announcementSlides[activeSlideIndex]?.actionUrl || ''}
+                              onChange={(e) => handleUpdateCurrentSlide('actionUrl', e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Preset Buttons for Instant Loading */}
+                        <div className="pt-2 border-t border-white/10">
+                          <span className="text-[10px] font-bold text-slate-400 block mb-1.5">
+                            ⚡ স্ক্রিনশটের মতো এক-ক্লিকে প্রিসেট লোড করুন:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleUpdateCurrentSlide(
+                                  'title',
+                                  '🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻'
+                                );
+                                handleUpdateCurrentSlide(
+                                  'message',
+                                  '🙇 সাম্প্রতিক লেনদেনে সাময়িক বিলম্বের কারণে সৃষ্ট অসুবিধার জন্য আমরা আন্তরিকভাবে ক্ষমা চেয়ে নিচ্ছি। আমাদের বিকাশ ও নগদ সিস্টেম বর্তমানে ১০০% সচল রয়েছে এবং সকল অর্ডার দ্রুত সম্পন্ন হচ্ছে।'
+                                );
+                                handleUpdateCurrentSlide('badge', 'ANNOUNCEMENT');
+                                handleUpdateCurrentSlide('actionText', 'টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡');
+                                handleUpdateCurrentSlide('actionUrl', 'https://t.me/RF2_SMM');
+                                showToast('কৃতজ্ঞতা নোটিশ লোড হয়েছে! সেভ বাটনে ক্লিক করুন।', 'info');
+                              }}
+                              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-amber-500/30 text-[11px] text-amber-300 text-left transition cursor-pointer font-bold"
+                            >
+                              👑 গভীর কৃতজ্ঞতা বার্তা
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleUpdateCurrentSlide('title', '🎉 বিশেষ ডিপোজিট ক্যাশব্যাক বোনাস ধামাকা!');
+                                handleUpdateCurrentSlide(
+                                  'message',
+                                  '💰 বিকাশ, নগদ বা রকেটে যেকোনো ডিপোজিটে পাবেন ইনস্ট্যান্ট ৫% থেকে ১০% পর্যন্ত ক্যাশ বোনাস! অফারটি সীমিত সময়ের জন্য।'
+                                );
+                                handleUpdateCurrentSlide('badge', 'DEPOSIT BONUS');
+                                handleUpdateCurrentSlide('actionText', 'ডিপোজিট করুন 💰');
+                                handleUpdateCurrentSlide('actionUrl', '#deposit');
+                                showToast('ডিপোজিট বোনাস লোড হয়েছে! সেভ বাটনে ক্লিক করুন।', 'info');
+                              }}
+                              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-emerald-500/30 text-[11px] text-emerald-300 text-left transition cursor-pointer font-bold"
+                            >
+                              🎁 ডিপোজিট ক্যাশব্যাক
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleUpdateCurrentSlide('title', '⚡ সোশ্যাল মিডিয়া সার্ভিস সুপার ফাস্ট ডেলিভারি!');
+                                handleUpdateCurrentSlide(
+                                  'message',
+                                  '🔥 ফেসবুক, ইনস্টাগ্রাম, ইউটিউব ও টিকটক সার্ভিস ড্রপলেস হাই কোয়ালিটিতে ইনস্ট্যান্ট ডেলিভারি দেওয়া হচ্ছে।'
+                                );
+                                handleUpdateCurrentSlide('badge', 'FAST DELIVERY');
+                                handleUpdateCurrentSlide('actionText', 'সার্ভিস রেট দেখুন 🚀');
+                                handleUpdateCurrentSlide('actionUrl', '#services');
+                                showToast('ফাস্ট ডেলিভারি লোড হয়েছে! সেভ বাটনে ক্লিক করুন।', 'info');
+                              }}
+                              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-sky-500/30 text-[11px] text-sky-300 text-left transition cursor-pointer font-bold"
+                            >
+                              🚀 ফাস্ট সার্ভিস ডেলিভারি
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Save Changes Button */}
+                        <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnnouncementSlides(DEFAULT_ANNOUNCEMENT_SLIDES);
+                              setActiveSlideIndex(0);
+                              showToast('ডিফল্ট ৩টি স্লাইড লোড হয়েছে। সেভ বাটনে ক্লিক করুন।', 'info');
+                            }}
+                            className="text-xs text-slate-400 hover:text-slate-200 underline cursor-pointer"
+                          >
+                            🔄 ডিফল্ট স্লাইডসমূহে রিসেট করুন
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveAnnouncementSlides}
+                            className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/30 flex items-center gap-2 transition active:scale-95 cursor-pointer ml-auto"
+                          >
+                            <i className="fas fa-save text-base"></i>
+                            <span>সকল স্লাইড ডাটাবেজে সেভ করুন</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB TAB 5: BROADCAST & LIVE NOTICE BANNER / TICKER */}
               {adminSubTab === 'notifications' && (
-                <div className="space-y-4">
-                  {/* SECTION 1: HOME PAGE SCROLLING LIVE NOTICE TICKER */}
+                <div className="space-y-5">
+                  {/* ======================================================== */}
+                  {/* SECTION 1: HOME PAGE NOTICE BANNER ADMIN PANEL (NEW)     */}
+                  {/* ======================================================== */}
+                  <div className="glass-card p-5 space-y-4 border border-blue-500/40 bg-gradient-to-br from-slate-900/95 via-indigo-950/40 to-slate-900/95 shadow-[0_4px_30px_rgba(59,130,246,0.18)] rounded-2xl animate-fade-in">
+                    {/* Header Row */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-sky-400 flex items-center justify-center text-white text-lg font-black shadow-lg shadow-blue-500/30">
+                          <i className="fas fa-bullhorn"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-black text-sm text-white flex items-center gap-2 flex-wrap">
+                            <span>📢 অ্যানাউন্সমেন্ট পপআপ ও নোটিশ ব্যানার (Announcement Popup & Banner)</span>
+                            <span className="text-[9px] bg-blue-500/25 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/40 font-mono font-bold">
+                              POPUP & BANNER
+                            </span>
+                          </h3>
+                          <p className="text-[11px] text-slate-300">
+                            অ্যাপ ওপেন হলে দেখানো অ্যানাউন্সমেন্ট পপআপ মডাল ও হোম স্ক্রিনের নোটিশ ব্যানার এখান থেকে পরিবর্তন করুন।
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons: Test popup & On/Off Switch */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAnnouncementModal(true);
+                            haptic('light');
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                        >
+                          <i className="fas fa-eye text-xs"></i>
+                          <span>👁️ পপআপ প্রিভিউ টেস্ট (Test Popup)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleQuickToggleFeature('showNoticeBanner', !adminShowNoticeBanner)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer active:scale-95 ${
+                            adminShowNoticeBanner
+                              ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                              : 'bg-red-500/30 text-red-300 border border-red-500/40'
+                          }`}
+                        >
+                          {adminShowNoticeBanner ? '✅ ব্যানার সক্রিয় (ON)' : '❌ ব্যানার বন্ধ (OFF)'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LIVE PREVIEW BOX */}
+                    <div className="p-3 bg-black/60 rounded-xl border border-blue-500/30">
+                      <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-sky-400 mb-2">
+                        <span className="flex items-center gap-1.5">
+                          <i className="fas fa-eye"></i>
+                          <span>লাইভ প্রিভিউ (ইউজাররা যেভাবে দেখবে)</span>
+                        </span>
+                        <span className="text-slate-400 font-mono text-[9px]">
+                          Theme: {adminBannerTheme.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Render simulated banner */}
+                      <div
+                        className={`overflow-hidden rounded-xl p-4 transition-all duration-300 border shadow-lg relative ${
+                          adminBannerTheme === 'blue'
+                            ? 'bg-gradient-to-br from-sky-950/90 via-slate-900/95 to-slate-950/95 border-sky-500/40'
+                            : adminBannerTheme === 'emerald'
+                            ? 'bg-gradient-to-br from-emerald-950/90 via-slate-900/95 to-slate-950/95 border-emerald-500/40'
+                            : adminBannerTheme === 'rose'
+                            ? 'bg-gradient-to-br from-rose-950/90 via-slate-900/95 to-slate-950/95 border-rose-500/40'
+                            : adminBannerTheme === 'purple'
+                            ? 'bg-gradient-to-br from-purple-950/90 via-slate-900/95 to-slate-950/95 border-purple-500/40'
+                            : 'bg-gradient-to-br from-amber-950/90 via-slate-900/95 to-slate-950/95 border-amber-500/40'
+                        }`}
+                      >
+                        {adminBannerImageUrl && (
+                          <div className="mb-3 overflow-hidden rounded-lg border border-white/10 max-h-36 relative">
+                            <img
+                              src={adminBannerImageUrl}
+                              alt="Poster Preview"
+                              className="w-full h-auto max-h-36 object-cover rounded-lg"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span
+                                className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border font-mono ${
+                                  adminBannerTheme === 'blue'
+                                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                    : adminBannerTheme === 'emerald'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                    : adminBannerTheme === 'rose'
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : adminBannerTheme === 'purple'
+                                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                }`}
+                              >
+                                <i className="fas fa-bullhorn text-[8px] mr-1"></i>
+                                {adminBannerBadge || 'NOTICE'}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-mono">⚡ LIVE PREVIEW</span>
+                            </div>
+                            <h4 className="text-xs font-black text-white leading-snug">
+                              {adminBannerTitle || 'ব্যানার শিরোনাম লিখুন...'}
+                            </h4>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-300 mt-2 leading-relaxed whitespace-pre-line">
+                          {adminBannerMessage || 'এখানে নোটিশ বার্তা লিখুন...'}
+                        </p>
+
+                        {adminBannerActionText && (
+                          <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                            <span
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-black inline-flex items-center gap-1 ${
+                                adminBannerTheme === 'blue'
+                                  ? 'bg-sky-500 text-white'
+                                  : adminBannerTheme === 'emerald'
+                                  ? 'bg-emerald-500 text-slate-950'
+                                  : adminBannerTheme === 'rose'
+                                  ? 'bg-rose-500 text-white'
+                                  : adminBannerTheme === 'purple'
+                                  ? 'bg-purple-500 text-white'
+                                  : 'bg-amber-500 text-slate-950'
+                              }`}
+                            >
+                              <span>{adminBannerActionText}</span>
+                              <i className="fas fa-arrow-right text-[9px]"></i>
+                            </span>
+                            {adminBannerActionUrl && (
+                              <span className="text-[9px] text-slate-400 truncate max-w-[150px] font-mono">
+                                {adminBannerActionUrl}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* QUICK PRESET TEMPLATES */}
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-300 block mb-2">
+                        ⚡ এক ক্লিকে রেডিমেড ব্যানার লোড করুন (One-Click Presets):
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻');
+                            setAdminBannerMessage('🙇‍♂️ সাম্প্রতিক লেনদেনে সাময়িক বিলম্বের কারণে সৃষ্ট অসুবিধার জন্য আমরা আন্তরিকভাবে ক্ষমাপ্রার্থী। আমাদের বিকাশ ও নগদ সিস্টেম বর্তমানে ১০০% সচল রয়েছে এবং সকল অর্ডার দ্রুত সম্পন্ন হচ্ছে।');
+                            setAdminBannerBadge('ANNOUNCEMENT');
+                            setAdminBannerTheme('amber');
+                            setAdminBannerActionText('টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡');
+                            setAdminBannerActionUrl('https://t.me/RF2_SMM');
+                            showToast('কৃতজ্ঞতা ও অ্যানাউন্সমেন্ট নোটিশ লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-amber-500/40 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          👑 <strong className="text-amber-300">অ্যানাউন্সমেন্ট পপআপ প্রিসেট:</strong> গভীর কৃতজ্ঞতা বার্তা
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('📢 আর এফ এসএমএম প্যানেল অফিসিয়াল নোটিশ');
+                            setAdminBannerMessage('⚡ ২৪/৭ ইনস্ট্যান্ট অটোমেটিক সার্ভিস চালু আছে। বিকাশ, নগদ ও রকেটে ডিপোজিট স্বয়ংক্রিয়ভাবে সেকেন্ডে ব্যালেন্সে যুক্ত হয়। যেকোনো অর্ডার ৫ মিনিটের মধ্যে শুরু হয়ে যায়!');
+                            setAdminBannerBadge('OFFICIAL NOTICE');
+                            setAdminBannerTheme('amber');
+                            setAdminBannerActionText('টেলিগ্রাম চ্যানেলে জয়েন করুন');
+                            setAdminBannerActionUrl('https://t.me/RF2_SMM');
+                            showToast('স্ট্যান্ডার্ড নোটিশ লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-amber-500/20 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          🌟 <strong className="text-amber-300">স্ট্যান্ডার্ড সিস্টেম নোটিশ:</strong> ২৪/৭ সার্ভিস ও সাপোর্ট
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('🎉 বিশেষ ডিপোজিট ক্যাশব্যাক বোনাস ধামাকা!');
+                            setAdminBannerMessage('💰 যেকোনো এমাউন্ট ডিপোজিটে পাবেন এক্সট্রা ৫% থেকে ১০% পর্যন্ত ইনস্ট্যান্ট ক্যাশ বোনাস! অফারটি সীমিত সময়ের জন্য প্রযোজ্য। দেরি না করে এখনই ডিপোজিট করুন।');
+                            setAdminBannerBadge('DEPOSIT BONUS');
+                            setAdminBannerTheme('emerald');
+                            setAdminBannerActionText('ডিপোজিট করুন 💰');
+                            setAdminBannerActionUrl('#deposit');
+                            showToast('ডিপোজিট বোনাস নোটিশ লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-emerald-500/20 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          🎁 <strong className="text-emerald-300">ডিপোজিট বোনাস ব্যানার:</strong> ক্যাশব্যাক অফার
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('🚀 আমাদের অফিসিয়াল টেলিগ্রাম চ্যানেলে যুক্ত হোন!');
+                            setAdminBannerMessage('📢 সকল নতুন সার্ভিস আপডেট, ডিসকাউন্ট প্রোমোকোড, গিভঅ্যাওয়ে ও জরুরী নোটিশ সবার আগে পেতে আমাদের ভেরিফায়েড টেলিগ্রাম চ্যানেলে জয়েন করুন।');
+                            setAdminBannerBadge('TELEGRAM CHANNEL');
+                            setAdminBannerTheme('blue');
+                            setAdminBannerActionText('টেলিগ্রাম চ্যানেলে জয়েন ⚡');
+                            setAdminBannerActionUrl('https://t.me/RF2_SMM');
+                            showToast('টেলিগ্রাম প্রমোশন নোটিশ লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-sky-500/20 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          🚀 <strong className="text-sky-300">টেলিগ্রাম চ্যানেল প্রমোশন:</strong> জয়েন বাটন
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('⚡ ফেসবুক, ইনস্টাগ্রাম ও টিকটক সার্ভিস সুপার ফাস্ট!');
+                            setAdminBannerMessage('🔥 ফেসবুক ফলোয়ার, রিয়েকশন, ইউটিউব ওয়াচটাইম ও টিকটক ভিউ এখন ড্রপলেস হাই কোয়ালিটিতে দ্রুত ডেলিভারি দেওয়া হচ্ছে। এখনই অর্ডার করুন!');
+                            setAdminBannerBadge('FAST DELIVERY');
+                            setAdminBannerTheme('purple');
+                            setAdminBannerActionText('সার্ভিস রেট দেখুন 🚀');
+                            setAdminBannerActionUrl('#search');
+                            showToast('ফাস্ট সার্ভিস আপডেট লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-purple-500/20 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          ⚡ <strong className="text-purple-300">সুপার ফাস্ট ডেলিভারি:</strong> সোশ্যাল মিডিয়া অফার
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerTitle('🛠️ সার্ভার আপগ্রেডেশন ও মেইনটেন্যান্স নোটিশ');
+                            setAdminBannerMessage('📢 আমাদের সার্ভার আপগ্রেডেশন সফলভাবে সম্পন্ন হয়েছে। সকল সার্ভিস ও অটো পেমেন্ট গেটওয়ে বর্তমানে সম্পূর্ণ নিরবচ্ছিন্নভাবে সক্রিয় রয়েছে।');
+                            setAdminBannerBadge('SYSTEM UPDATE');
+                            setAdminBannerTheme('rose');
+                            setAdminBannerActionText('লাইভ সাপোর্ট 💬');
+                            setAdminBannerActionUrl('#support');
+                            showToast('সার্ভার মেইনটেন্যান্স নোটিশ লোড হয়েছে, সেভ বাটনে ক্লিক করুন', 'info');
+                          }}
+                          className="p-2.5 text-left rounded-xl bg-white/5 hover:bg-white/10 border border-rose-500/20 text-xs text-slate-300 hover:text-white transition cursor-pointer sm:col-span-2 lg:col-span-2"
+                        >
+                          ⚠️ <strong className="text-rose-300">সার্ভার মেইনটেন্যান্স অ্যালার্ট:</strong> সিস্টেম নোটিশ
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* THEME COLOR SELECTOR */}
+                    <div>
+                      <label className="form-label text-slate-300 flex items-center justify-between mb-1.5">
+                        <span className="font-extrabold">ব্যানার কালার থিম (Banner Theme Color)</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Selected: {adminBannerTheme}</span>
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {[
+                          { id: 'amber', name: 'অ্যাম্বার গোল্ড', bg: 'from-amber-500 to-yellow-600', text: 'text-amber-300', border: 'border-amber-500/50' },
+                          { id: 'blue', name: 'স্কাই ব্লু', bg: 'from-sky-500 to-blue-600', text: 'text-sky-300', border: 'border-sky-500/50' },
+                          { id: 'emerald', name: 'এমারেল্ড গ্রিন', bg: 'from-emerald-500 to-teal-600', text: 'text-emerald-300', border: 'border-emerald-500/50' },
+                          { id: 'rose', name: 'রোজ রেড', bg: 'from-rose-500 to-red-600', text: 'text-rose-300', border: 'border-rose-500/50' },
+                          { id: 'purple', name: 'রয়্যাল পার্পল', bg: 'from-purple-500 to-indigo-600', text: 'text-purple-300', border: 'border-purple-500/50' },
+                        ].map((theme) => (
+                          <button
+                            key={theme.id}
+                            type="button"
+                            onClick={() => {
+                              setAdminBannerTheme(theme.id as any);
+                              haptic('light');
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                              adminBannerTheme === theme.id
+                                ? `bg-gradient-to-r ${theme.bg} text-white shadow-lg ${theme.border} ring-2 ring-white/20`
+                                : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                            }`}
+                          >
+                            <span className={`w-3 h-3 rounded-full bg-gradient-to-tr ${theme.bg}`}></span>
+                            <span>{theme.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* INPUTS ROW: BADGE & TITLE */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="form-label text-slate-300 font-extrabold">
+                          ব্যানার ব্যাজ/ট্যাগ (Badge Tag)
+                        </label>
+                        <input
+                          type="text"
+                          className="input-modern text-xs text-white"
+                          placeholder="যেমন: SPECIAL NOTICE"
+                          value={adminBannerBadge}
+                          onChange={(e) => setAdminBannerBadge(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="form-label text-slate-300 font-extrabold">
+                          ব্যানার শিরোনাম (Banner Title)
+                        </label>
+                        <input
+                          type="text"
+                          className="input-modern text-xs text-white"
+                          placeholder="যেমন: 📢 আর এফ এসএমএম প্যানেল অফিসিয়াল নোটিশ"
+                          value={adminBannerTitle}
+                          onChange={(e) => setAdminBannerTitle(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* DETAILED MESSAGE TEXTAREA */}
+                    <div>
+                      <label className="form-label text-slate-300 flex items-center justify-between">
+                        <span className="font-extrabold">বিস্তারিত নোটিশ বার্তা (Banner Message Body)</span>
+                        <span className="text-[10px] text-slate-400">একাধিক লাইন এবং ইমোজি সাপোর্ট করে</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        className="input-modern text-xs text-white resize-none"
+                        placeholder="এখানে নোটিশ বিস্তারিত লিখুন..."
+                        value={adminBannerMessage}
+                        onChange={(e) => setAdminBannerMessage(e.target.value)}
+                      />
+                    </div>
+
+                    {/* BANNER POSTER IMAGE (UPLOAD OR URL) */}
+                    <div>
+                      <label className="form-label text-slate-300 flex items-center justify-between">
+                        <span className="font-extrabold">ব্যানার পোস্টার / ছবি (Banner Image)</span>
+                        <span className="text-[10px] text-slate-400">অপশনাল (ইচ্ছে হলে দিতে পারেন)</span>
+                      </label>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* Device File Upload */}
+                        <div>
+                          <label className="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-200 hover:text-white transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                            <i className="fas fa-image text-sky-400"></i>
+                            <span>
+                              {adminBannerImageUploading ? 'ছবি আপলোড হচ্ছে...' : 'ডিভাইস থেকে ছবি আপলোড'}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleBannerImageUpload}
+                              disabled={adminBannerImageUploading}
+                            />
+                          </label>
+                        </div>
+
+                        {/* Direct Image URL */}
+                        <div>
+                          <input
+                            type="text"
+                            className="input-modern text-xs text-white"
+                            placeholder="অথবা ছবির ডিরেক্ট URL পেস্ট করুন (https://...)"
+                            value={adminBannerImageUrl}
+                            onChange={(e) => setAdminBannerImageUrl(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Image Thumbnail & Remove */}
+                      {adminBannerImageUrl && (
+                        <div className="mt-2 flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <img
+                              src={adminBannerImageUrl}
+                              alt="Thumbnail"
+                              className="w-12 h-10 object-cover rounded-lg border border-white/10"
+                            />
+                            <span className="text-[10px] text-slate-300 truncate max-w-[200px] font-mono">
+                              {adminBannerImageUrl.startsWith('data:') ? 'আপলোডকৃত ছবি (Base64)' : adminBannerImageUrl}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminBannerImageUrl('');
+                              showToast('ব্যানার ছবি মুছে ফেলা হয়েছে', 'info');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <i className="fas fa-trash text-[10px]"></i>
+                            <span>ছবি মুছুন</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACTION BUTTON SETTINGS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="form-label text-slate-300 font-extrabold">
+                          অ্যাকশন বাটন টেক্সট (Button Text)
+                        </label>
+                        <input
+                          type="text"
+                          className="input-modern text-xs text-white"
+                          placeholder="যেমন: টেলিগ্রাম চ্যানেলে জয়েন করুন"
+                          value={adminBannerActionText}
+                          onChange={(e) => setAdminBannerActionText(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="form-label text-slate-300 font-extrabold">
+                          বাটন লিংক বা টার্গেট (Target Link)
+                        </label>
+                        <input
+                          type="text"
+                          className="input-modern text-xs text-white"
+                          placeholder="যেমন: https://t.me/RF2_SMM অথবা #deposit"
+                          value={adminBannerActionUrl}
+                          onChange={(e) => setAdminBannerActionUrl(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Link Helper Chips */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-400 mr-1">কুইক লিংক শর্টকাট:</span>
+                      {[
+                        { label: 'টেলিগ্রাম লিংক', val: 'https://t.me/RF2_SMM' },
+                        { label: '#deposit (ডিপোজিট)', val: '#deposit' },
+                        { label: '#orders (অর্ডার হিস্টোরি)', val: '#orders' },
+                        { label: '#support (AI সাপোর্ট)', val: '#support' },
+                        { label: '#tasks (টাস্ক আর্ন)', val: '#tasks' },
+                        { label: '#referral (রেফারেল)', val: '#referral' },
+                        { label: '#services (সার্ভিস সার্চ)', val: '#search' },
+                      ].map((chip) => (
+                        <button
+                          key={chip.val}
+                          type="button"
+                          onClick={() => {
+                            setAdminBannerActionUrl(chip.val);
+                            showToast(`লিংক সেট হয়েছে: ${chip.val}`, 'info');
+                          }}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-sky-300 hover:text-white transition cursor-pointer"
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* SAVE BUTTON FOR NOTICE BANNER */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveNoticeBanner}
+                        disabled={adminSavingBanner}
+                        className="w-full py-3 px-5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-black text-xs sm:text-sm shadow-[0_4px_25px_rgba(37,99,235,0.4)] hover:shadow-[0_6px_30px_rgba(37,99,235,0.6)] active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        {adminSavingBanner ? (
+                          <>
+                            <i className="fas fa-spinner fa-spin"></i>
+                            <span>নোটিশ ব্যানার সেভ হচ্ছে...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-save"></i>
+                            <span>💾 নোটিশ ব্যানার সেভ ও আপডেট করুন (Save Notice Banner)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ======================================================== */}
+                  {/* SECTION 2: HOME PAGE SCROLLING LIVE NOTICE TICKER        */}
+                  {/* ======================================================== */}
                   <div className="glass-card p-5 space-y-4 border border-amber-500/40 bg-gradient-to-br from-amber-950/20 via-slate-900/90 to-slate-900/90 shadow-[0_4px_25px_rgba(245,158,11,0.15)] rounded-2xl animate-fade-in">
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
                       <div className="flex items-center gap-3">
@@ -8892,29 +10614,29 @@ export default function App() {
                         </button>
                       </div>
 
-                      {/* 3. Header 3D Live Button Toggle */}
+                      {/* 3. 3D Background Canvas Toggle */}
                       <div className="p-3 rounded-xl bg-slate-900/90 border border-white/10 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${adminShow3DButton ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${is3DEnabled ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
                             <i className="fas fa-cube"></i>
                           </div>
                           <div>
-                            <div className="text-xs font-black text-white">হেডারের 3D লাইভ বাটন</div>
+                            <div className="text-xs font-black text-white">3D ব্যাকগ্রাউন্ড ক্যানভাস</div>
                             <div className="text-[10px] text-slate-400">
-                              {adminShow3DButton ? '🧊 হেডারে 3D বাটন দৃশ্যমান' : '🚫 হেডারে 3D বাটন দেখাবে না'}
+                              {is3DEnabled ? '🧊 3D গ্রাফিক্স সক্রিয় (ON)' : '🚫 3D ব্যাকগ্রাউন্ড বন্ধ (OFF)'}
                             </div>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleQuickToggleFeature('show3DButton', !adminShow3DButton)}
+                          onClick={() => handleAdminToggle3D(!is3DEnabled)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer active:scale-95 ${
-                            adminShow3DButton
+                            is3DEnabled
                               ? 'bg-cyan-400 text-slate-950 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
                               : 'bg-red-500/30 text-red-300 border border-red-500/40'
                           }`}
                         >
-                          {adminShow3DButton ? 'ON (চালু)' : 'OFF (বন্ধ)'}
+                          {is3DEnabled ? 'ON (চালু)' : 'OFF (বন্ধ)'}
                         </button>
                       </div>
 
@@ -8943,6 +10665,93 @@ export default function App() {
                           {adminShowNoticeTicker ? 'ON (চালু)' : 'OFF (বন্ধ)'}
                         </button>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* LIVE 3D BACKGROUND THEME (Admin Only Panel) */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-cyan-950/20 to-slate-900 border border-cyan-500/40 space-y-4 shadow-xl">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 text-base shadow">
+                          <i className="fas fa-cube animate-spin" style={{ animationDuration: '10s' }}></i>
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
+                            <span>Live 3D Background Theme (লাইভ ৩ডি ব্যাকগ্রাউন্ড থিম)</span>
+                            <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/30 font-mono font-bold">
+                              ADMIN CONTROL
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-slate-300">
+                            অ্যাপের ব্যাকগ্রাউন্ডে ইন্টারঅ্যাক্টিভ ৩ডি ক্যানভাস থিম নির্বাচন করুন ও সক্রিয় রাখুন (শুধুমাত্র এডমিন প্যানেল থেকে নিয়ন্ত্রণযোগ্য)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAdminToggle3D(!is3DEnabled)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                            is3DEnabled
+                              ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                              : 'bg-red-500/30 text-red-300 border border-red-500/40'
+                          }`}
+                        >
+                          <i className={`fas ${is3DEnabled ? 'fa-check-circle' : 'fa-power-off'}`}></i>
+                          <span>{is3DEnabled ? '3D সক্রিয় (ON)' : '3D বন্ধ (OFF)'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShow3DThemeModal(true);
+                            haptic('light');
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-300 transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                        >
+                          <i className="fas fa-expand"></i>
+                          <span>পপআপ প্রিভিউ টেস্ট</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Theme Selector Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                      {(Object.keys(THEME_CONFIGS) as ThreeDTheme[]).map((themeKey) => {
+                        const cfg = THEME_CONFIGS[themeKey];
+                        const isSelected = threeDTheme === themeKey;
+                        return (
+                          <button
+                            key={themeKey}
+                            type="button"
+                            onClick={() => handleAdminSelect3DTheme(themeKey)}
+                            className={`p-3 rounded-2xl border text-left transition relative cursor-pointer group active:scale-95 ${
+                              isSelected
+                                ? 'bg-gradient-to-br from-cyan-500/25 to-blue-600/30 border-cyan-400 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
+                                : 'bg-slate-900/80 border-white/10 hover:border-white/20 hover:bg-white/5'
+                            }`}
+                          >
+                            {isSelected && (
+                              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                            )}
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="font-black text-xs text-white capitalize flex items-center gap-1.5">
+                                <i className="fas fa-palette text-cyan-400 text-[10px]"></i>
+                                <span>{cfg?.name || themeKey.replace('_', ' ')}</span>
+                              </span>
+                              {isSelected && (
+                                <span className="text-[8px] bg-cyan-400 text-slate-950 font-black px-1.5 py-0.2 rounded-md">
+                                  CURRENT
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-300 line-clamp-2">
+                              {cfg?.badge || 'Futuristic 3D canvas graphic'}
+                            </p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -9480,19 +11289,19 @@ export default function App() {
 
                       <button
                         type="button"
-                        onClick={() => handleQuickToggleFeature('show3DButton', !adminShow3DButton)}
+                        onClick={() => handleAdminToggle3D(!is3DEnabled)}
                         className={`p-2.5 rounded-xl text-left border transition flex items-center justify-between cursor-pointer ${
-                          adminShow3DButton
+                          is3DEnabled
                             ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
                             : 'bg-red-500/10 border-red-500/30 text-red-300'
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           <i className="fas fa-cube"></i>
-                          <span className="text-xs font-bold">হেডার 3D বাটন</span>
+                          <span className="text-xs font-bold">3D ব্যাকগ্রাউন্ড</span>
                         </div>
                         <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-black/40">
-                          {adminShow3DButton ? 'ON' : 'OFF'}
+                          {is3DEnabled ? 'ON' : 'OFF'}
                         </span>
                       </button>
 
@@ -10779,6 +12588,23 @@ export default function App() {
               }}
             />
           )}
+
+          {/* Announcement Popup Modal (Matching screenshot with Crown, Poster, White Content, Dual Golden Buttons) */}
+          <AnnouncementPopupModal
+            isOpen={showAnnouncementModal}
+            onClose={() => setShowAnnouncementModal(false)}
+            slides={announcementSlides}
+            singleBadge={welcomeConfig.bannerBadge || 'ANNOUNCEMENT'}
+            singleTitle={welcomeConfig.bannerTitle || '🔻 আপনাকে আমাদের গভীর কৃতজ্ঞতা জানাচ্ছি! 🔻'}
+            singleMessage={
+              welcomeConfig.bannerMessage ||
+              '🙇‍♂️ আর এফ এসএমএম প্যানেল ব্যবহার করার জন্য আপনাকে আন্তরিক ধন্যবাদ। আমাদের ২৪/৭ অটোমেটিক বিকাশ, নগদ ও রকেট ডিপোজিট সিস্টেম সম্পূর্ণ সক্রিয় রয়েছে। যেকোনো অর্ডারে সর্বোচ্চ গতি নিশ্চিত করতে আমরা নিরবচ্ছিন্ন কাজ করছি।'
+            }
+            singleImageUrl={welcomeConfig.bannerImageUrl}
+            singleActionText={welcomeConfig.bannerActionText || 'টেলিগ্রাম চ্যানেলে জয়েন করুন ⚡'}
+            singleActionUrl={welcomeConfig.bannerActionUrl || 'https://t.me/RF2_SMM'}
+            onActionClick={handleBannerActionClick}
+          />
 
           {/* 3D Theme Customizer Modal */}
           {show3DThemeModal && (
