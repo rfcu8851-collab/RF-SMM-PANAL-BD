@@ -17,18 +17,22 @@ export interface UserChatContext {
 export async function generateAISupportResponse(
   userMessage: string,
   chatHistory: { role: 'user' | 'model'; text: string }[] = [],
-  userContext?: UserChatContext
+  userContext?: UserChatContext,
+  image?: string | null,
+  videoUrl?: string | null
 ): Promise<AIResponseResult> {
   const msg = (userMessage || '').trim();
   const lower = msg.toLowerCase();
 
-  // 1. Try Gemini API if available via server proxy or client environment
+  // 1. Try Gemini API if available via server proxy
   try {
     const res = await fetch('/api/ai-support', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: msg,
+        image: image || null,
+        videoUrl: videoUrl || null,
         history: chatHistory.slice(-6),
         userContext: userContext || {}
       })
@@ -44,14 +48,36 @@ export async function generateAISupportResponse(
       }
     }
   } catch (e) {
-    // Fall back to intelligent client-side NLP engine
+    // Fall back to intelligent client-side NLP engine smoothly
   }
 
   // 2. Intelligent Real-time Context-Aware Knowledge Engine (Bangla & English)
   let reply = '';
 
-  // Greetings & Identity
+  // AI Support not working / System issues
   if (
+    lower.includes('কাজ করতেছে না') ||
+    lower.includes('কাজ করছে না') ||
+    lower.includes('নট ওয়ার্কিং') ||
+    lower.includes('not working') ||
+    lower.includes('error') ||
+    lower.includes('problem') ||
+    lower.includes('সমস্যা হয়েছে') ||
+    lower.includes('সমস্যা')
+  ) {
+    reply = `👋 আসসালামু আলাইকুম! আমি **RF SMM লাইভ AI সাপোর্ট সহকারী**, আমি এখন সম্পূর্ণ সক্রিয় ও প্রস্তুত আছি! ⚡
+
+আপনার কি কোনো বিশেষ সার্ভিস বা অপশন ব্যবহারে সমস্যা হচ্ছে? অনুগ্রহ করে বিস্তারিত জানান:
+• 💳 **ডিপোজিট সমস্যা:** টাকা পাঠিয়েছেন কিন্তু ব্যালেন্স আসেনি? (Sender Number ও TrxID লিখে জানান বা স্লিপের স্ক্রিনশট পাঠান)
+• 🚀 **অর্ডার সমস্যা:** অর্ডার পেন্ডিং আছে বা গতি কম? (অর্ডার আইডি বা লিংক লিখে জানান)
+• 📸 **স্ক্রিনশট:** নিচের ক্যামেরা বাটনে ক্লিক করে সরাসরি ছবি পাঠাতে পারেন।
+
+সরাসরি এডমিনের সাহায্য পেতে:
+📲 **WhatsApp Support:** https://wa.me/8801342163841
+✈️ **Telegram Support:** https://t.me/RF2_SMM`;
+  }
+  // Greetings & Identity
+  else if (
     lower === 'hi' ||
     lower === 'hello' ||
     lower === 'hey' ||
