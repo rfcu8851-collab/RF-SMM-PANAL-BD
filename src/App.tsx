@@ -463,17 +463,26 @@ export default function App() {
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
   // Admin Security & Unlock State
-  const [adminUnlocked, setAdminUnlocked] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('rf_smm_admin_unlocked') === 'true';
-    } catch (_) {
-      return false;
-    }
-  });
+  const [adminUnlocked, setAdminUnlocked] = useState<boolean>(false);
   const [showAdminAccessModal, setShowAdminAccessModal] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
   const [adminPinError, setAdminPinError] = useState('');
   const [showAdminPinPassword, setShowAdminPinPassword] = useState(false);
+
+  // Clear legacy admin unlock state for regular users
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('smm_session');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.email?.toLowerCase() !== 'rashalrt5@gmail.com' && parsed.username?.toLowerCase() !== 'rashalrt5') {
+          localStorage.removeItem('rf_smm_admin_unlocked');
+        }
+      } else {
+        localStorage.removeItem('rf_smm_admin_unlocked');
+      }
+    } catch (_) {}
+  }, []);
 
   // Secret Admin Access via URL hash/query (e.g. /#admin or /?admin)
   useEffect(() => {
@@ -510,44 +519,39 @@ export default function App() {
     }
   };
 
-  // Check if current logged in user is admin (rashal117 or ihicggh@gmail.com or unlocked with PIN)
+  // Check if current logged in user is admin (STRICTLY rashalrt5@gmail.com only)
   const isAdminUser = Boolean(
-    adminUnlocked ||
-    (currentUser && (
-      currentUser.username?.toLowerCase() === 'rashal117' ||
-      currentUser.name?.toLowerCase() === 'rashal117' ||
-      currentUser.email?.toLowerCase() === 'ihicggh@gmail.com' ||
-      currentUser.email?.toLowerCase() === 'rashal117@gmail.com'
-    ))
+    currentUser && (
+      currentUser.email?.toLowerCase() === 'rashalrt5@gmail.com' ||
+      currentUser.username?.toLowerCase() === 'rashalrt5' ||
+      currentUser.uid === 'admin_rashalrt5'
+    )
   );
 
   const handleVerifyAdminPin = () => {
     const pin = adminPinInput.trim();
     if (!pin) {
-      setAdminPinError('এডমিন পাসওয়ার্ড বা পিন লিখুন');
+      setAdminPinError('এডমিন সিকিউরিটি পাসওয়ার্ড লিখুন');
       haptic('error');
       return;
     }
 
-    // Master PINs / Passwords
-    const validPins = ['123456', 'admin123', 'admin', 'rashal117', 'smm2026', 'rf2_smm'];
-    if (validPins.includes(pin.toLowerCase())) {
+    // Secret Admin Password Verification
+    if (pin === 'Rashal117' || pin.toLowerCase() === 'rashal117') {
       setAdminUnlocked(true);
       try {
         localStorage.setItem('rf_smm_admin_unlocked', 'true');
       } catch (_) {}
 
-      // If no admin session, establish one or keep current user with admin rights
-      if (!currentUser || (currentUser.username?.toLowerCase() !== 'rashal117' && currentUser.email?.toLowerCase() !== 'ihicggh@gmail.com')) {
-        const adminSession: UserSession = {
-          uid: currentUser?.uid || 'admin_rashal117',
-          username: currentUser?.username || 'rashal117',
-          name: currentUser?.name || 'Farju Admin (RF SMM)',
-          email: currentUser?.email || 'ihicggh@gmail.com',
-          photoURL: currentUser?.photoURL || ''
-        };
-        currentUserSessionLogin(adminSession);
-      }
+      // Establish admin session
+      const adminSession: UserSession = {
+        uid: 'admin_rashalrt5',
+        username: 'rashalrt5',
+        name: 'Farju Admin (RF SMM)',
+        email: 'rashalrt5@gmail.com',
+        photoURL: currentUser?.photoURL || ''
+      };
+      currentUserSessionLogin(adminSession);
 
       setShowAdminAccessModal(false);
       setAdminPinInput('');
@@ -556,30 +560,9 @@ export default function App() {
       showToast('👑 এডমিন প্যানেল সফলভাবে আনলক হয়েছে!', 'success');
       haptic('success');
     } else {
-      setAdminPinError('ভুল পাসওয়ার্ড বা পিন! সঠিক এডমিন পিন লিখুন (যেমন: 123456)');
+      setAdminPinError('ভুল পাসওয়ার্ড! অনুগ্রহ করে সঠিক এডমিন পাসওয়ার্ড লিখুন।');
       haptic('error');
     }
-  };
-
-  const handleDirectAdminLogin = () => {
-    setAdminUnlocked(true);
-    try {
-      localStorage.setItem('rf_smm_admin_unlocked', 'true');
-    } catch (_) {}
-    const adminSession: UserSession = {
-      uid: 'admin_rashal117',
-      username: 'rashal117',
-      name: 'Farju Admin (RF SMM)',
-      email: 'ihicggh@gmail.com',
-      photoURL: ''
-    };
-    currentUserSessionLogin(adminSession);
-    setShowAdminAccessModal(false);
-    setAdminPinInput('');
-    setAdminPinError('');
-    setActiveTab('admin');
-    showToast('👑 Farju Admin হিসেবে সরাসরি লগইন সফল হয়েছে!', 'success');
-    haptic('success');
   };
 
   const handleLockAdminMode = () => {
@@ -1005,6 +988,466 @@ export default function App() {
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   };
 
+  // Ultra-reliable Referrer Resolution Helper (resolves UID, Username, Name)
+  const resolveReferrerInfo = async (
+    rawInput: string,
+    excludeUid?: string
+  ): Promise<{ uid: string; username: string; name: string } | null> => {
+    if (!rawInput) return null;
+    let clean = rawInput.trim().replace(/^@+/, '').toLowerCase();
+    clean = clean.replace(/^(ref_|r_|start_|startapp_)/, '').trim();
+    if (!clean) return null;
+    if (excludeUid && clean === excludeUid.toLowerCase()) return null;
+
+    // Direct Admin check (Rashal)
+    if (
+      clean === 'rashalrt5' ||
+      clean === 'rashalrt5@gmail.com' ||
+      clean === 'admin_rashalrt5'
+    ) {
+      return {
+        uid: 'admin_rashalrt5',
+        username: 'rashalrt5',
+        name: 'Farju Admin (RF SMM)'
+      };
+    }
+
+    // 1. If numeric (Telegram ID)
+    if (/^\d+$/.test(clean)) {
+      try {
+        const tgNum = Number(clean);
+        const qTg = query(collection(db, 'users'), where('telegramId', '==', tgNum));
+        const sTg = await getDocs(qTg);
+        if (!sTg.empty) {
+          const d = sTg.docs[0].data();
+          return {
+            uid: sTg.docs[0].id,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      } catch (_) {}
+      try {
+        const tgDoc = await getDoc(doc(db, 'users', `tg_${clean}`));
+        if (tgDoc.exists()) {
+          const d = tgDoc.data();
+          return {
+            uid: `tg_${clean}`,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check direct UID in users
+    try {
+      const uDoc = await getDoc(doc(db, 'users', clean));
+      if (uDoc.exists()) {
+        const d = uDoc.data();
+        return {
+          uid: clean,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 3. Check direct UID in auth_users
+    try {
+      const aDoc = await getDoc(doc(db, 'auth_users', clean));
+      if (aDoc.exists()) {
+        const d = aDoc.data();
+        return {
+          uid: clean,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 4. Check prefixed tg_ in users
+    try {
+      const tgPrefDoc = await getDoc(doc(db, 'users', `tg_${clean}`));
+      if (tgPrefDoc.exists()) {
+        const d = tgPrefDoc.data();
+        return {
+          uid: `tg_${clean}`,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 5. Exact username query in auth_users
+    try {
+      const q1 = query(collection(db, 'auth_users'), where('username', '==', clean));
+      const s1 = await getDocs(q1);
+      if (!s1.empty) {
+        const d = s1.docs[0].data();
+        return {
+          uid: s1.docs[0].id,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 6. Exact username query in users
+    try {
+      const q2 = query(collection(db, 'users'), where('username', '==', clean));
+      const s2 = await getDocs(q2);
+      if (!s2.empty) {
+        const d = s2.docs[0].data();
+        return {
+          uid: s2.docs[0].id,
+          username: d.username || clean,
+          name: d.name || d.username || clean
+        };
+      }
+    } catch (_) {}
+
+    // 7. In-memory check from allUsersList state if available
+    if (allUsersList && allUsersList.length > 0) {
+      const found = allUsersList.find((u: any) => {
+        const uName = (u.username || '').toLowerCase();
+        const uUid = (u.uid || '').toLowerCase();
+        const uEmail = (u.email || '').toLowerCase();
+        return uName === clean || uUid === clean || uEmail === clean || uUid === `tg_${clean}`;
+      });
+      if (found) {
+        return {
+          uid: found.uid,
+          username: (found as any).username || clean,
+          name: (found as any).name || (found as any).username || clean
+        };
+      }
+    }
+
+    // 8. Deep scan in users collection (case-insensitive username/email/telegramId match)
+    try {
+      const allUsersSnap = await getDocs(collection(db, 'users'));
+      for (const snap of allUsersSnap.docs) {
+        const d = snap.data();
+        const uName = (d.username || '').trim().toLowerCase();
+        const uEmail = (d.email || '').trim().toLowerCase();
+        const uId = snap.id.toLowerCase();
+        const uTgId = d.telegramId ? String(d.telegramId).toLowerCase() : '';
+        if (uName === clean || uEmail === clean || uId === clean || uTgId === clean || uId === `tg_${clean}`) {
+          return {
+            uid: snap.id,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      }
+    } catch (_) {}
+
+    // 9. Deep scan in auth_users collection
+    try {
+      const allAuthSnap = await getDocs(collection(db, 'auth_users'));
+      for (const snap of allAuthSnap.docs) {
+        const d = snap.data();
+        const uName = (d.username || '').trim().toLowerCase();
+        const uEmail = (d.email || '').trim().toLowerCase();
+        const uId = snap.id.toLowerCase();
+        const uTgId = d.telegramId ? String(d.telegramId).toLowerCase() : '';
+        if (uName === clean || uEmail === clean || uId === clean || uTgId === clean || uId === `tg_${clean}`) {
+          return {
+            uid: snap.id,
+            username: d.username || clean,
+            name: d.name || d.username || clean
+          };
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: use clean input as both UID and username so reward can be credited
+    return {
+      uid: clean,
+      username: clean,
+      name: clean
+    };
+  };
+
+  // Helper to extract Telegram WebApp User and Referral Parameter from all possible sources
+  const extractTelegramAndReferralData = () => {
+    let tgUser: any = null;
+    let rawReferral = '';
+
+    const webApp = (window as any).Telegram?.WebApp;
+    if (webApp) {
+      try {
+        webApp.ready();
+        webApp.expand();
+      } catch (_) {}
+
+      // 1. Check initDataUnsafe
+      if (webApp.initDataUnsafe?.user?.id) {
+        tgUser = webApp.initDataUnsafe.user;
+      }
+      if (webApp.initDataUnsafe?.start_param) {
+        rawReferral = String(webApp.initDataUnsafe.start_param);
+      }
+
+      // 2. Check initData query string
+      if (!tgUser && webApp.initData) {
+        try {
+          const p = new URLSearchParams(webApp.initData);
+          const userStr = p.get('user');
+          if (userStr) {
+            tgUser = JSON.parse(userStr);
+          }
+          if (!rawReferral && p.get('start_param')) {
+            rawReferral = p.get('start_param') || '';
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Check window URL query parameters
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (!rawReferral) {
+        rawReferral = searchParams.get('ref') ||
+                      searchParams.get('r') ||
+                      searchParams.get('start') ||
+                      searchParams.get('startapp') ||
+                      searchParams.get('start_param') ||
+                      searchParams.get('tgWebAppStartParam') || '';
+      }
+    } catch (_) {}
+
+    // 4. Check window location hash
+    try {
+      const hash = window.location.hash || '';
+      if (hash) {
+        const cleanHash = hash.replace(/^#/, '');
+        const hashParams = new URLSearchParams(cleanHash);
+        if (!rawReferral) {
+          rawReferral = hashParams.get('tgWebAppStartParam') ||
+                        hashParams.get('start_param') ||
+                        hashParams.get('startapp') ||
+                        hashParams.get('start') ||
+                        hashParams.get('ref') ||
+                        hashParams.get('r') || '';
+        }
+        if (!tgUser && hash.includes('tgWebAppData=')) {
+          const match = hash.match(/tgWebAppData=([^&]+)/);
+          if (match && match[1]) {
+            const decoded = decodeURIComponent(match[1]);
+            const p = new URLSearchParams(decoded);
+            const uStr = p.get('user');
+            if (uStr) {
+              tgUser = JSON.parse(uStr);
+            }
+            if (!rawReferral && p.get('start_param')) {
+              rawReferral = p.get('start_param') || '';
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 5. Fallback referral from localStorage
+    if (!rawReferral) {
+      try {
+        rawReferral = localStorage.getItem('smm_referral_ref') || '';
+      } catch (_) {}
+    }
+
+    // Clean the referral code
+    let cleanRef = rawReferral.trim().replace(/^@+/, '').toLowerCase();
+    cleanRef = cleanRef.replace(/^(ref_|r_|start_|startapp_)/, '').trim();
+
+    if (cleanRef) {
+      try {
+        localStorage.setItem('smm_referral_ref', cleanRef);
+      } catch (_) {}
+    }
+
+    return { tgUser, cleanRef };
+  };
+
+  // Perform Automatic Telegram Login & Cloud Sync + Referral Association
+  const performTelegramAutoLogin = async (tgUser: any, cleanRef?: string) => {
+    if (!tgUser || !tgUser.id) return;
+    const tgId = String(tgUser.id);
+    const uid = `tg_${tgId}`;
+    const rawUsername = tgUser.username ? tgUser.username.toLowerCase().replace(/[^a-z0-9_]/g, '') : `tg_${tgId}`;
+    const firstName = tgUser.first_name || '';
+    const lastName = tgUser.last_name || '';
+    const name = [firstName, lastName].filter(Boolean).join(' ') || tgUser.username || `Telegram User ${tgId.slice(-4)}`;
+    const photoURL = tgUser.photo_url || '';
+    const email = tgUser.username ? `${tgUser.username}@t.me` : `${tgId}@t.me`;
+
+    const isTgAdmin = (
+      rawUsername === 'rashalrt5' ||
+      tgUser.username?.toLowerCase() === 'rashalrt5' ||
+      tgId === '7386892835'
+    );
+
+    const telegramSession: UserSession = {
+      uid: isTgAdmin ? 'admin_rashalrt5' : uid,
+      username: isTgAdmin ? 'rashalrt5' : rawUsername,
+      name: isTgAdmin ? 'Farju Admin (RF SMM)' : name,
+      email: isTgAdmin ? 'rashalrt5@gmail.com' : email,
+      photoURL: photoURL,
+      telegramId: tgUser.id
+    };
+
+    // 1. Immediately log in in UI state & store session
+    setCurrentUser(telegramSession);
+    if (photoURL) setUserPhotoURL(photoURL);
+    setIsLoggedIn(true);
+    setShowWelcomeModal(true);
+    setShowSplash(false);
+    try {
+      localStorage.setItem('smm_session', JSON.stringify(telegramSession));
+    } catch (_) {}
+
+    // 2. Cloud Firestore sync & referral association
+    try {
+      const userDocRef = doc(db, 'users', telegramSession.uid);
+      const authDocRef = doc(db, 'auth_users', telegramSession.uid);
+      const uSnap = await getDoc(userDocRef);
+
+      const refToLookup = cleanRef || (localStorage.getItem('smm_referral_ref') || '').trim();
+      let refUid: string | null = null;
+      let refUser: string | null = null;
+
+      if (refToLookup) {
+        try {
+          const resolved = await resolveReferrerInfo(refToLookup, telegramSession.uid);
+          if (resolved && resolved.uid !== telegramSession.uid) {
+            refUid = resolved.uid;
+            refUser = resolved.username;
+          }
+        } catch (err) {
+          console.warn('Error resolving telegram referral:', err);
+        }
+      }
+
+      if (!uSnap.exists()) {
+        // NEW TELEGRAM USER - AUTO CREATED WITHOUT REGISTRATION FORM!
+        const newUserData = {
+          name: telegramSession.name,
+          username: telegramSession.username,
+          email: telegramSession.email,
+          balance: 0,
+          total_orders: 0,
+          totalReferrals: 0,
+          totalReferralEarnings: 0,
+          telegramId: tgUser.id,
+          photoURL: photoURL,
+          referredBy: refUid || null,
+          referredByUsername: refUser || null,
+          createdAt: serverTimestamp(),
+          lastActive: serverTimestamp()
+        };
+
+        await setDoc(userDocRef, newUserData, { merge: true });
+        await setDoc(authDocRef, {
+          name: telegramSession.name,
+          username: telegramSession.username,
+          email: telegramSession.email,
+          telegramId: tgUser.id,
+          photoURL: photoURL,
+          referredBy: refUid || null,
+          referredByUsername: refUser || null,
+          createdAt: serverTimestamp(),
+          lastActive: serverTimestamp()
+        }, { merge: true });
+
+        // If referred by someone, increment referrer's count and notify them
+        if (refUid && refUser) {
+          try {
+            const refUserRef = doc(db, 'users', refUid);
+            const refSnap = await getDoc(refUserRef);
+            if (refSnap.exists()) {
+              const currentTotalRefs = refSnap.data().totalReferrals || 0;
+              await updateDoc(refUserRef, {
+                totalReferrals: currentTotalRefs + 1
+              });
+            }
+            await addDoc(collection(db, 'user_notifications'), {
+              uid: refUid,
+              title: `👥 নতুন রেফারেল মেম্বার যুক্ত হয়েছে!`,
+              body: `@${telegramSession.username} আপনার রেফারেল লিংক ব্যবহার করে টেলিগ্রামের মাধ্যমে সরাসরি যুক্ত হয়েছে!`,
+              type: 'referral',
+              read: false,
+              createdAt: serverTimestamp()
+            });
+          } catch (rErr) {
+            console.warn('Referrer stats increment note:', rErr);
+          }
+
+          showToast(`🎉 স্বাগতম ${telegramSession.name}! আপনি @${refUser}-এর রেফারেলে যুক্ত হয়েছেন 🚀`, 'success');
+        } else {
+          showToast(`⚡ স্বাগতম ${telegramSession.name}! টেলিগ্রাম অটো লগইন সফল 🚀`, 'success');
+        }
+      } else {
+        // EXISTING USER
+        const existingData = uSnap.data() || {};
+
+        // If existing user has NO referrer yet, and came through a referral link, link them now!
+        if (!existingData.referredBy && !existingData.referredByUsername && refUid && refUser && refUid !== telegramSession.uid) {
+          try {
+            await updateDoc(userDocRef, {
+              referredBy: refUid,
+              referredByUsername: refUser,
+              lastActive: serverTimestamp()
+            });
+            await updateDoc(authDocRef, {
+              referredBy: refUid,
+              referredByUsername: refUser,
+              lastActive: serverTimestamp()
+            });
+            const refUserRef = doc(db, 'users', refUid);
+            const refSnap = await getDoc(refUserRef);
+            if (refSnap.exists()) {
+              const currentTotalRefs = refSnap.data().totalReferrals || 0;
+              await updateDoc(refUserRef, {
+                totalReferrals: currentTotalRefs + 1
+              });
+            }
+            await addDoc(collection(db, 'user_notifications'), {
+              uid: refUid,
+              title: `👥 নতুন রেফারেল মেম্বার লিংক হয়েছে!`,
+              body: `@${telegramSession.username} আপনার রেফারেল লিংকের মাধ্যমে যুক্ত হয়েছে!`,
+              type: 'referral',
+              read: false,
+              createdAt: serverTimestamp()
+            });
+            setCurrentUser((prev) => prev ? {
+              ...prev,
+              referredBy: refUid,
+              referredByUsername: refUser
+            } : prev);
+            showToast(`✅ ইনভাইটার @${refUser} সফলভাবে আপনার একাউন্টে যুক্ত হয়েছে!`, 'success');
+          } catch (lErr) {
+            console.warn('Existing user ref link note:', lErr);
+          }
+        } else {
+          // Sync any existing referral or profile fields into local state
+          setCurrentUser((prev) => prev ? {
+            ...prev,
+            name: existingData.name || prev.name,
+            username: existingData.username || prev.username,
+            photoURL: existingData.photoURL || prev.photoURL,
+            referredBy: existingData.referredBy || prev.referredBy,
+            referredByUsername: existingData.referredByUsername || prev.referredByUsername
+          } : prev);
+          try {
+            await updateDoc(userDocRef, { lastActive: serverTimestamp() });
+          } catch (_) {}
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Telegram auto-login cloud sync error:', syncErr);
+    }
+  };
+
   // 1. Initial Load & Auto Login Check
   useEffect(() => {
     if (tg) {
@@ -1014,156 +1457,61 @@ export default function App() {
       } catch (_) {}
     }
 
-    // Auto-detect referral code from URL query parameters (?ref=username or ?r=username)
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const refCode = urlParams.get('ref') || urlParams.get('r');
-      if (refCode && refCode.trim()) {
-        const cleanRef = refCode.trim().toLowerCase();
-        localStorage.setItem('smm_referral_ref', cleanRef);
-        setRegReferralCode(cleanRef);
-      } else {
-        const savedRef = localStorage.getItem('smm_referral_ref');
-        if (savedRef) {
-          setRegReferralCode(savedRef.trim().toLowerCase());
-        }
-      }
-    } catch (err) {
-      console.log('Referral param parsing note:', err);
-    }
-
     const initApp = async () => {
       try {
-        const tgUser = tg?.initDataUnsafe?.user;
+        const { tgUser, cleanRef } = extractTelegramAndReferralData();
+        if (cleanRef) {
+          setRegReferralCode(cleanRef);
+        }
 
-        // Auto-login if inside Telegram Mini App
+        // Instant Auto-login if inside Telegram Mini App
         if (tgUser && tgUser.id) {
-          const tgId = String(tgUser.id);
-          const uid = `tg_${tgId}`;
-          const rawUsername = tgUser.username ? tgUser.username.toLowerCase() : `tg_${tgId}`;
-          const firstName = tgUser.first_name || '';
-          const lastName = tgUser.last_name || '';
-          const name = [firstName, lastName].filter(Boolean).join(' ') || tgUser.username || `Telegram User ${tgId.slice(-4)}`;
-          const photoURL = tgUser.photo_url || '';
-          const email = tgUser.username ? `${tgUser.username}@t.me` : `${tgId}@t.me`;
-
-          const isTgAdmin = (
-            rawUsername === 'rashal117' ||
-            tgUser.username?.toLowerCase() === 'rashal117' ||
-            tgId === '7386892835'
-          );
-
-          const telegramSession: UserSession = {
-            uid: isTgAdmin ? 'admin_rashal117' : uid,
-            username: isTgAdmin ? 'rashal117' : rawUsername,
-            name: isTgAdmin ? 'Farju Admin (RF SMM)' : name,
-            email: isTgAdmin ? 'ihicggh@gmail.com' : email,
-            photoURL: photoURL,
-            telegramId: tgUser.id
-          };
-
-          setCurrentUser(telegramSession);
-          if (photoURL) setUserPhotoURL(photoURL);
-          setIsLoggedIn(true);
-          setShowWelcomeModal(true);
-          localStorage.setItem('smm_session', JSON.stringify(telegramSession));
-
-          // Background cloud sync / profile creation
-          (async () => {
-            try {
-              const userDocRef = doc(db, 'users', telegramSession.uid);
-              const authDocRef = doc(db, 'auth_users', telegramSession.uid);
-              const uSnap = await getDoc(userDocRef);
-
-              if (!uSnap.exists()) {
-                const startParam = tg?.initDataUnsafe?.start_param || '';
-                let refUid: string | null = null;
-                let refUser: string | null = null;
-                const cleanRef = startParam ? startParam.replace(/^ref_/, '').trim() : (localStorage.getItem('smm_referral_ref') || '').trim();
-                
-                if (cleanRef) {
-                  try {
-                    const resolved = await resolveReferrerInfo(cleanRef, telegramSession.uid);
-                    if (resolved) {
-                      refUid = resolved.uid;
-                      refUser = resolved.username;
-                    }
-                  } catch (_) {}
-                }
-
-                const newUserData = {
-                  name: telegramSession.name,
-                  username: telegramSession.username,
-                  email: telegramSession.email,
-                  balance: 0,
-                  total_orders: 0,
-                  totalReferrals: 0,
-                  totalReferralEarnings: 0,
-                  telegramId: tgUser.id,
-                  photoURL: photoURL,
-                  referredBy: refUid || null,
-                  referredByUsername: refUser || null,
-                  createdAt: serverTimestamp()
-                };
-
-                await setDoc(userDocRef, newUserData, { merge: true });
-                await setDoc(authDocRef, {
-                  name: telegramSession.name,
-                  username: telegramSession.username,
-                  email: telegramSession.email,
-                  telegramId: tgUser.id,
-                  photoURL: photoURL,
-                  createdAt: serverTimestamp()
-                }, { merge: true });
-              } else {
-                const d = uSnap.data();
-                if (d) {
-                  if (d.name || d.username || d.photoURL || d.referredBy || d.referredByUsername) {
-                    setCurrentUser((prev) => prev ? {
-                      ...prev,
-                      name: d.name || prev.name,
-                      username: d.username || prev.username,
-                      photoURL: d.photoURL || prev.photoURL,
-                      referredBy: d.referredBy || prev.referredBy,
-                      referredByUsername: d.referredByUsername || prev.referredByUsername
-                    } : prev);
-                  }
-                }
-              }
-            } catch (err) {
-              console.warn('Telegram auto-login cloud sync notice:', err);
-            }
-          })();
+          await performTelegramAutoLogin(tgUser, cleanRef);
         } else {
           // Standard browser session check
           const saved = localStorage.getItem('smm_session');
           if (saved) {
-            const session = JSON.parse(saved);
-            if (session && session.uid && session.username) {
-              setCurrentUser(session);
-              if (session.photoURL) setUserPhotoURL(session.photoURL);
-              setIsLoggedIn(true);
-              setShowWelcomeModal(true);
+            try {
+              const session = JSON.parse(saved);
+              if (session && session.uid && session.username) {
+                setCurrentUser(session);
+                if (session.photoURL) setUserPhotoURL(session.photoURL);
+                setIsLoggedIn(true);
+                setShowWelcomeModal(true);
 
-              try {
-                const uSnap = await getDoc(doc(db, 'auth_users', session.uid));
-                if (uSnap.exists()) {
-                  const uData = uSnap.data();
-                  if (uData) {
-                    setCurrentUser((prev) => prev ? {
-                      ...prev,
-                      name: uData.name || prev.name,
-                      photoURL: uData.photoURL || prev.photoURL,
-                      referredBy: uData.referredBy || prev.referredBy,
-                      referredByUsername: uData.referredByUsername || prev.referredByUsername
-                    } : prev);
+                try {
+                  const uSnap = await getDoc(doc(db, 'auth_users', session.uid));
+                  if (uSnap.exists()) {
+                    const uData = uSnap.data();
+                    if (uData) {
+                      setCurrentUser((prev) => prev ? {
+                        ...prev,
+                        name: uData.name || prev.name,
+                        photoURL: uData.photoURL || prev.photoURL,
+                        referredBy: uData.referredBy || prev.referredBy,
+                        referredByUsername: uData.referredByUsername || prev.referredByUsername
+                      } : prev);
+                    }
                   }
+                } catch (syncErr) {
+                  console.warn('Profile background verification notice:', syncErr);
                 }
-              } catch (syncErr) {
-                console.warn('Profile background verification notice:', syncErr);
               }
-            }
+            } catch (_) {}
           }
+
+          // Polling retry for Telegram WebApp in case script finishes initializing a few milliseconds after mount
+          let retries = 0;
+          const pollInterval = setInterval(() => {
+            retries++;
+            const tData = extractTelegramAndReferralData();
+            if (tData.tgUser && tData.tgUser.id) {
+              clearInterval(pollInterval);
+              performTelegramAutoLogin(tData.tgUser, tData.cleanRef);
+            } else if (retries >= 12) {
+              clearInterval(pollInterval);
+            }
+          }, 150);
         }
       } catch (err) {
         console.warn('Session init notice:', err);
@@ -1171,7 +1519,7 @@ export default function App() {
 
       setTimeout(() => {
         setShowSplash(false);
-      }, 1200);
+      }, 1000);
     };
 
     initApp();
@@ -1968,147 +2316,6 @@ export default function App() {
     }
   };
 
-  // Ultra-reliable Referrer Resolution Helper (resolves UID, Username, Name)
-  const resolveReferrerInfo = async (
-    rawInput: string,
-    excludeUid?: string
-  ): Promise<{ uid: string; username: string; name: string } | null> => {
-    if (!rawInput) return null;
-    const clean = rawInput.trim().replace(/^@+/, '').toLowerCase();
-    if (!clean) return null;
-    if (excludeUid && clean === excludeUid.toLowerCase()) return null;
-
-    // Direct Admin check (Rashal117)
-    if (
-      clean === 'rashal117' ||
-      clean === 'admin_rashal117' ||
-      clean === 'ihicggh@gmail.com' ||
-      clean === 'rashal117@gmail.com' ||
-      clean === 'farju' ||
-      clean === '7386892835'
-    ) {
-      return {
-        uid: 'admin_rashal117',
-        username: 'rashal117',
-        name: 'Farju Admin (RF SMM)'
-      };
-    }
-
-    // 1. Check direct UID in users
-    try {
-      const uDoc = await getDoc(doc(db, 'users', clean));
-      if (uDoc.exists()) {
-        const d = uDoc.data();
-        return {
-          uid: clean,
-          username: d.username || clean,
-          name: d.name || d.username || clean
-        };
-      }
-    } catch (_) {}
-
-    // 2. Check direct UID in auth_users
-    try {
-      const aDoc = await getDoc(doc(db, 'auth_users', clean));
-      if (aDoc.exists()) {
-        const d = aDoc.data();
-        return {
-          uid: clean,
-          username: d.username || clean,
-          name: d.name || d.username || clean
-        };
-      }
-    } catch (_) {}
-
-    // 3. Exact username query in auth_users
-    try {
-      const q1 = query(collection(db, 'auth_users'), where('username', '==', clean));
-      const s1 = await getDocs(q1);
-      if (!s1.empty) {
-        const d = s1.docs[0].data();
-        return {
-          uid: s1.docs[0].id,
-          username: d.username || clean,
-          name: d.name || d.username || clean
-        };
-      }
-    } catch (_) {}
-
-    // 4. Exact username query in users
-    try {
-      const q2 = query(collection(db, 'users'), where('username', '==', clean));
-      const s2 = await getDocs(q2);
-      if (!s2.empty) {
-        const d = s2.docs[0].data();
-        return {
-          uid: s2.docs[0].id,
-          username: d.username || clean,
-          name: d.name || d.username || clean
-        };
-      }
-    } catch (_) {}
-
-    // 5. In-memory check from allUsersList state if available
-    if (allUsersList && allUsersList.length > 0) {
-      const found = allUsersList.find((u: any) => {
-        const uName = (u.username || '').toLowerCase();
-        const uUid = (u.uid || '').toLowerCase();
-        const uEmail = (u.email || '').toLowerCase();
-        return uName === clean || uUid === clean || uEmail === clean;
-      });
-      if (found) {
-        return {
-          uid: found.uid,
-          username: found.username || clean,
-          name: found.name || found.username || clean
-        };
-      }
-    }
-
-    // 6. Deep scan in users collection (case-insensitive username/email match)
-    try {
-      const allUsersSnap = await getDocs(collection(db, 'users'));
-      for (const snap of allUsersSnap.docs) {
-        const d = snap.data();
-        const uName = (d.username || '').trim().toLowerCase();
-        const uEmail = (d.email || '').trim().toLowerCase();
-        const uId = snap.id.toLowerCase();
-        if (uName === clean || uEmail === clean || uId === clean) {
-          return {
-            uid: snap.id,
-            username: d.username || clean,
-            name: d.name || d.username || clean
-          };
-        }
-      }
-    } catch (_) {}
-
-    // 7. Deep scan in auth_users collection
-    try {
-      const allAuthSnap = await getDocs(collection(db, 'auth_users'));
-      for (const snap of allAuthSnap.docs) {
-        const d = snap.data();
-        const uName = (d.username || '').trim().toLowerCase();
-        const uEmail = (d.email || '').trim().toLowerCase();
-        const uId = snap.id.toLowerCase();
-        if (uName === clean || uEmail === clean || uId === clean) {
-          return {
-            uid: snap.id,
-            username: d.username || clean,
-            name: d.name || d.username || clean
-          };
-        }
-      }
-    } catch (_) {}
-
-    // Fallback: use clean input as both UID and username so reward can be credited
-    return {
-      uid: clean,
-      username: clean,
-      name: clean
-    };
-  };
-
   // Helper: Award Referral Deposit Bonus (5% Cash Commission) to Referrer upon Deposit Approval
   const processReferralDepositBonus = async (
     depositingUid: string,
@@ -2263,11 +2470,14 @@ export default function App() {
       } catch (_) {}
 
       // Instant state sync if active user is the referrer (or is admin)
-      const isCurrentAdmin = currentUser?.uid === 'admin_rashal117' || currentUser?.username === 'rashal117';
+      const isCurrentAdmin =
+        currentUser?.uid === 'admin_rashalrt5' ||
+        currentUser?.username === 'rashalrt5' ||
+        currentUser?.email === 'rashalrt5@gmail.com';
       if (
         currentUser?.uid === refInfo.uid ||
         (currentUser?.username || '').toLowerCase() === refInfo.username.toLowerCase() ||
-        (isCurrentAdmin && refInfo.uid === 'admin_rashal117')
+        (isCurrentAdmin && refInfo.uid === 'admin_rashalrt5')
       ) {
         setUserBalance(newBal);
         setUserReferralEarnings(newEarn);
@@ -3269,30 +3479,35 @@ export default function App() {
     haptic('heavy');
 
     const isAdminIdentifier = (
-      identifier === 'rashal117' ||
-      identifier === 'admin' ||
-      identifier === 'ihicggh@gmail.com' ||
-      identifier === 'rashal117@gmail.com'
+      identifier === 'rashalrt5@gmail.com' ||
+      identifier === 'rashalrt5'
     );
 
-    // Fast admin login via standard login form with master PIN/Password
-    if (isAdminIdentifier && (loginPassword === '123456' || loginPassword === 'farju117' || loginPassword === 'admin123')) {
-      const adminSession: UserSession = {
-        uid: 'admin_rashal117',
-        username: 'rashal117',
-        name: 'Farju Admin (RF SMM)',
-        email: identifier.includes('@') ? identifier : 'ihicggh@gmail.com',
-        photoURL: ''
-      };
-      setAdminUnlocked(true);
-      try {
-        localStorage.setItem('rf_smm_admin_unlocked', 'true');
-      } catch (_) {}
-      currentUserSessionLogin(adminSession);
-      setActiveTab('admin');
-      showToast('Admin logged in successfully! 👑', 'success');
-      setAuthSubmitting(false);
-      return;
+    // Secure Admin login via standard login form
+    if (isAdminIdentifier) {
+      if (loginPassword === 'Rashal117' || loginPassword.toLowerCase() === 'rashal117') {
+        const adminSession: UserSession = {
+          uid: 'admin_rashalrt5',
+          username: 'rashalrt5',
+          name: 'Farju Admin (RF SMM)',
+          email: 'rashalrt5@gmail.com',
+          photoURL: ''
+        };
+        setAdminUnlocked(true);
+        try {
+          localStorage.setItem('rf_smm_admin_unlocked', 'true');
+        } catch (_) {}
+        currentUserSessionLogin(adminSession);
+        setActiveTab('admin');
+        showToast('👑 Admin logged in successfully!', 'success');
+        setAuthSubmitting(false);
+        return;
+      } else {
+        setLoginPassErr('Incorrect password (ভুল পাসওয়ার্ড)');
+        haptic('error');
+        setAuthSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -3343,20 +3558,6 @@ export default function App() {
       }
 
       if (!userDoc || !userData) {
-        // Direct administrative access fallback
-        if (isAdminIdentifier) {
-          const adminSession: UserSession = {
-            uid: 'admin_rashal117',
-            username: 'rashal117',
-            name: 'Farju Admin (RF SMM)',
-            email: identifier.includes('@') ? identifier : 'ihicggh@gmail.com',
-            photoURL: ''
-          };
-          currentUserSessionLogin(adminSession);
-          showToast('Admin logged in successfully! 👑', 'success');
-          return;
-        }
-
         setLoginUserErr('Account not found with this username or email. (একাউন্ট পাওয়া যায়নি)');
         haptic('error');
         setAuthSubmitting(false);
@@ -3383,18 +3584,6 @@ export default function App() {
       showToast(`Welcome back, ${userData.name || userData.username}! 🎉`, 'success');
     } catch (e: any) {
       console.error('Login error:', e);
-      if (isAdminIdentifier) {
-        const adminSession: UserSession = {
-          uid: 'admin_rashal117',
-          username: 'rashal117',
-          name: 'Farju Admin (RF SMM)',
-          email: identifier.includes('@') ? identifier : 'ihicggh@gmail.com',
-          photoURL: ''
-        };
-        currentUserSessionLogin(adminSession);
-        showToast('Admin logged in successfully! 👑', 'success');
-        return;
-      }
       haptic('error');
       showToast('Login notice: ' + (e?.message || 'Please check credentials'), 'error');
     } finally {
@@ -3582,7 +3771,7 @@ export default function App() {
 
   // One-Tap Telegram Login Handler
   const handleTelegramOneTapLogin = async () => {
-    const tgUser = tg?.initDataUnsafe?.user;
+    const { tgUser, cleanRef } = extractTelegramAndReferralData();
     if (!tgUser || !tgUser.id) {
       showToast('টেলিগ্রাম অ্যাপ বা মিনি অ্যাপে খুললে স্বয়ংক্রিয় লগইন সক্রিয় হবে।', 'info');
       return;
@@ -3590,33 +3779,7 @@ export default function App() {
 
     setAuthSubmitting(true);
     haptic('heavy');
-
-    const tgId = String(tgUser.id);
-    const uid = `tg_${tgId}`;
-    const rawUsername = tgUser.username ? tgUser.username.toLowerCase() : `tg_${tgId}`;
-    const firstName = tgUser.first_name || '';
-    const lastName = tgUser.last_name || '';
-    const name = [firstName, lastName].filter(Boolean).join(' ') || tgUser.username || `Telegram User ${tgId.slice(-4)}`;
-    const photoURL = tgUser.photo_url || '';
-    const email = tgUser.username ? `${tgUser.username}@t.me` : `${tgId}@t.me`;
-
-    const isTgAdmin = (
-      rawUsername === 'rashal117' ||
-      tgUser.username?.toLowerCase() === 'rashal117' ||
-      tgId === '7386892835'
-    );
-
-    const telegramSession: UserSession = {
-      uid: isTgAdmin ? 'admin_rashal117' : uid,
-      username: isTgAdmin ? 'rashal117' : rawUsername,
-      name: isTgAdmin ? 'Farju Admin (RF SMM)' : name,
-      email: isTgAdmin ? 'ihicggh@gmail.com' : email,
-      photoURL: photoURL,
-      telegramId: tgUser.id
-    };
-
-    currentUserSessionLogin(telegramSession);
-    showToast(`⚡ Telegram Auto-Login সফল! Welcome, ${telegramSession.name} 🚀`, 'success');
+    await performTelegramAutoLogin(tgUser, cleanRef);
     setAuthSubmitting(false);
   };
 
@@ -4290,7 +4453,7 @@ export default function App() {
       });
 
       haptic('success');
-      showToast('🎉 ডিপোজিট রিকোয়েস্ট সফলভাবে জমা হয়েছে! এডমিন খুব দ্রুত ভেরিফাই করে ব্যালেন্স যোগ করবেন।', 'success');
+      showToast('🎉 ডিপোজিট রিকোয়েস্ট সফলভাবে জমা হয়েছে! খুব দ্রুত ভেরিফাই করে ব্যালেন্স যোগ করা হবে।', 'success');
       setDepositTrxId('');
       setDepositReceiptImage('');
       setDepositReceiptFileName('');
@@ -4927,55 +5090,32 @@ export default function App() {
       {!showSplash && isLoggedIn && (
         <div>
           {/* HEADER */}
-          <header className="premium-header px-5 pt-7 pb-7">
-            <div className="flex items-center justify-between mb-6 relative z-10">
+          <header className={`premium-header px-5 pt-6 ${activeTab === 'home' ? 'pb-6' : 'pb-4'}`}>
+            <div className={`flex items-center justify-between relative z-10 ${activeTab === 'home' ? 'mb-6' : 'mb-0'}`}>
+              {/* Site Branding / Logo - Clean & Official */}
               <div
-                onClick={() => {
-                  setActiveTab('profile');
-                  haptic('light');
-                }}
-                className="flex items-center gap-3 cursor-pointer group"
-                title="View Profile (প্রোফাইল দেখুন)"
+                onClick={handleSecretAdminTap}
+                className="flex items-center gap-2.5 cursor-pointer select-none group"
+                title="RF SMM PANEL"
               >
-                {/* Admin Logo or User Avatar */}
-                <div className="relative flex items-center gap-2.5">
-                  {adminSiteLogo && (
-                    <img
-                      src={adminSiteLogo}
-                      alt="Site Logo"
-                      className="w-10 h-10 sm:w-11 sm:h-11 object-contain rounded-xl shadow-lg border border-amber-400/50 bg-black/40 p-1 group-hover:scale-105 transition duration-300 flex-shrink-0"
-                    />
-                  )}
-                  <div className="relative">
-                    {userPhotoURL || currentUser?.photoURL ? (
-                      <img
-                        src={userPhotoURL || currentUser?.photoURL}
-                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shadow-lg border-2 border-amber-400/60 group-hover:scale-105 transition duration-300"
-                        alt="User Avatar"
-                      />
-                    ) : (
-                      <img
-                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          currentUser?.name || 'User'
-                        )}&background=3b82f6&color=fff&bold=true`}
-                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover shadow-lg border-2 border-white/10 group-hover:scale-105 transition duration-300"
-                        alt="User Avatar"
-                      />
-                    )}
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-md flex items-center justify-center border-2 border-[#030712]">
-                      <i className="fas fa-check text-white text-[6px]"></i>
-                    </div>
+                {adminSiteLogo ? (
+                  <img
+                    src={adminSiteLogo}
+                    alt="Site Logo"
+                    className="w-10 h-10 object-contain rounded-xl shadow-lg border border-amber-400/50 bg-black/40 p-1 group-hover:scale-105 transition duration-300 flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center font-black text-sm shadow-lg border border-amber-300/40 flex-shrink-0">
+                    RF
                   </div>
-                </div>
+                )}
                 <div>
-                  <h3 className="font-extrabold text-base tracking-tight text-white group-hover:text-amber-400 transition flex items-center gap-1.5">
-                    <span>{currentUser?.name || 'User'}</span>
-                    <i className="fas fa-chevron-right text-[10px] text-slate-500 group-hover:text-amber-400"></i>
+                  <h3 className="font-black text-sm tracking-tight text-white leading-tight flex items-center gap-1">
+                    <span>RF SMM PANEL</span>
                   </h3>
-                  <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-mono">
-                    <i className="fas fa-fingerprint text-[8px] text-blue-400"></i>
-                    <span>@{currentUser?.username || currentUser?.uid.slice(0, 8)}</span>
-                  </div>
+                  <p className="text-[9px] font-bold text-amber-400/90 tracking-wider font-mono uppercase">
+                    SMART SERVICES
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
@@ -5063,178 +5203,164 @@ export default function App() {
                     </span>
                   )}
                 </button>
+              </div>
+            </div>
 
-                {/* Admin Mode Toggle Button - ONLY VISIBLE TO LOGGED IN ADMIN */}
-                {isAdminUser && (
+            {/* HOME TAB STATS & ACTIONS - ONLY VISIBLE ON HOME TAB */}
+            {activeTab === 'home' && (
+              <>
+                {/* STAT CARDS */}
+                <div className="grid grid-cols-2 gap-3 relative z-10">
+                  {/* Balance Card */}
+                  <div className="stat-card bg-gradient-to-br from-slate-900/95 via-slate-900/70 to-blue-950/50 border border-blue-500/30 shadow-[0_8px_25px_rgba(0,0,0,0.35)] group rounded-[22px] p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-blue-500/25 border border-blue-500/40 rounded-xl flex items-center justify-center text-blue-400 shadow-inner">
+                          <i className="fas fa-wallet text-xs"></i>
+                        </div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
+                          ব্যালেন্স (Balance)
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-mono text-cyan-400/90 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+                        ≈ ${(userBalance / 120).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
+                        ৳ {userBalance.toFixed(2)}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveTab('funds');
+                        haptic('heavy');
+                      }}
+                      className="mt-2.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-[11px] font-black uppercase tracking-wider shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:shadow-[0_8px_25px_rgba(37,99,235,0.6)] border border-white/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <i className="fas fa-plus-circle text-amber-300 text-xs"></i>
+                      <span>টাকা জমা (Add Funds)</span>
+                    </button>
+                  </div>
+
+                  {/* Total Orders Card */}
+                  <div className="stat-card bg-gradient-to-br from-slate-900/95 via-slate-900/70 to-indigo-950/50 border border-indigo-500/30 shadow-[0_8px_25px_rgba(0,0,0,0.35)] group rounded-[22px] p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-7 h-7 bg-indigo-500/25 border border-indigo-500/40 rounded-xl flex items-center justify-center text-indigo-400 shadow-inner">
+                          <i className="fas fa-boxes-stacked text-xs"></i>
+                        </div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
+                          অর্ডার (Orders)
+                        </span>
+                      </div>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" title="System Active"></span>
+                    </div>
+                    <div className="flex items-baseline justify-between mb-1">
+                      <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
+                        {userTotalOrders}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveTab('orders');
+                        haptic('light');
+                      }}
+                      className="mt-2.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-slate-800/90 to-slate-900/95 hover:from-slate-750 hover:to-slate-850 border border-indigo-500/35 hover:border-indigo-400 text-slate-100 text-[11px] font-black uppercase tracking-wider shadow-[0_4px_15px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.25)] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <i className="fas fa-list-check text-indigo-400 text-xs"></i>
+                      <span>অর্ডার হিস্টোরি</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* LIVE ANNOUNCEMENT TICKER (controlled by admin) */}
+                {welcomeConfig.showNoticeTicker !== false && (
+                  <div
+                    onClick={() => {
+                      setShowAnnouncementModal(true);
+                      haptic('light');
+                    }}
+                    className="mt-3 relative z-10 overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-900/95 border border-amber-500/40 hover:border-amber-400 p-2.5 flex items-center gap-2.5 shadow-lg backdrop-blur-md cursor-pointer transition active:scale-[0.99] group"
+                    title="সম্পূর্ণ নোটিশ দেখতে ক্লিক করুন"
+                  >
+                    <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-xl border border-amber-500/40 whitespace-nowrap shadow-sm group-hover:bg-amber-500/35 transition">
+                      <i className="fas fa-bullhorn text-amber-400 text-xs animate-bounce"></i>
+                      <span>নোটিশ</span>
+                    </div>
+                    <div className="overflow-hidden whitespace-nowrap w-full">
+                      <p className="text-[11px] font-semibold text-slate-200 inline-block animate-marquee">
+                        {welcomeConfig.noticeText || '⚡ ২৪/৭ ইনস্ট্যান্ট সার্ভিস সক্রিয় | বিকাশ, নগদ, রকেটে ইনস্ট্যান্ট ডিপোজিট বোনাস চলছে | যেকোনো প্রয়োজনে আমাদের লাইভ সাপোর্টে যোগাযোগ করুন 🚀'}
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/30 whitespace-nowrap group-hover:text-white transition flex items-center gap-1">
+                      <span>দেখুন</span>
+                      <i className="fas fa-arrow-right text-[8px]"></i>
+                    </div>
+                  </div>
+                )}
+
+                {/* USER QUICK 4-GRID ACTION BAR */}
+                <div className="grid grid-cols-4 gap-2.5 mt-3 relative z-10">
+                  {/* Live Orders */}
                   <button
                     onClick={() => {
-                      setActiveTab(activeTab === 'admin' ? 'home' : 'admin');
+                      setShowLiveOrdersModal(true);
                       haptic('heavy');
                     }}
-                    className={`relative px-3 py-1.5 rounded-2xl border flex items-center gap-1.5 font-extrabold text-[11px] cursor-pointer transition-all duration-200 active:scale-90 shadow-md ${
-                      activeTab === 'admin'
-                        ? 'bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-600 text-slate-950 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.6)] font-black'
-                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-400'
-                    }`}
-                    title="Admin Panel (এডমিন প্যানেল)"
+                    className="p-3 rounded-2xl bg-gradient-to-b from-red-950/50 via-slate-900/80 to-slate-950/90 border border-red-500/35 hover:border-red-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(239,68,68,0.18)] hover:shadow-[0_6px_22px_rgba(239,68,68,0.35)]"
                   >
-                    <i className="fas fa-crown text-amber-400 text-xs"></i>
-                    <span>ADMIN</span>
+                    <div className="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 relative group-hover:scale-110 transition duration-200 shadow-inner">
+                      <i className="fas fa-satellite-dish text-xs animate-pulse"></i>
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">লাইভ অর্ডার</span>
                   </button>
-                )}
-              </div>
-            </div>
 
-            {/* STAT CARDS */}
-            <div className="grid grid-cols-2 gap-3 relative z-10">
-              {/* Balance Card */}
-              <div className="stat-card bg-gradient-to-br from-slate-900/95 via-slate-900/70 to-blue-950/50 border border-blue-500/30 shadow-[0_8px_25px_rgba(0,0,0,0.35)] group rounded-[22px] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-7 h-7 bg-blue-500/25 border border-blue-500/40 rounded-xl flex items-center justify-center text-blue-400 shadow-inner">
-                      <i className="fas fa-wallet text-xs"></i>
+                  {/* Daily Tasks */}
+                  <button
+                    onClick={() => {
+                      setShowTasksModal(true);
+                      haptic('heavy');
+                    }}
+                    className="p-3 rounded-2xl bg-gradient-to-b from-amber-950/50 via-slate-900/80 to-slate-950/90 border border-amber-500/35 hover:border-amber-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(245,158,11,0.18)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.35)]"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 group-hover:scale-110 transition duration-200 shadow-inner">
+                      <i className="fas fa-gift text-xs"></i>
                     </div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
-                      ব্যালেন্স (Balance)
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-mono text-cyan-400/90 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
-                    ≈ ${(userBalance / 120).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
-                    ৳ {userBalance.toFixed(2)}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveTab('funds');
-                    haptic('heavy');
-                  }}
-                  className="mt-2.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-[11px] font-black uppercase tracking-wider shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:shadow-[0_8px_25px_rgba(37,99,235,0.6)] border border-white/20 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <i className="fas fa-plus-circle text-amber-300 text-xs"></i>
-                  <span>টাকা জমা (Add Funds)</span>
-                </button>
-              </div>
+                    <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">টাস্ক বোনাস</span>
+                  </button>
 
-              {/* Total Orders Card */}
-              <div className="stat-card bg-gradient-to-br from-slate-900/95 via-slate-900/70 to-indigo-950/50 border border-indigo-500/30 shadow-[0_8px_25px_rgba(0,0,0,0.35)] group rounded-[22px] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-7 h-7 bg-indigo-500/25 border border-indigo-500/40 rounded-xl flex items-center justify-center text-indigo-400 shadow-inner">
-                      <i className="fas fa-boxes-stacked text-xs"></i>
+                  {/* Price / Services */}
+                  <button
+                    onClick={() => {
+                      setShowSearchModal(true);
+                      haptic('light');
+                    }}
+                    className="p-3 rounded-2xl bg-gradient-to-b from-cyan-950/50 via-slate-900/80 to-slate-950/90 border border-cyan-500/35 hover:border-cyan-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(56,189,248,0.18)] hover:shadow-[0_6px_22px_rgba(56,189,248,0.35)]"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 group-hover:scale-110 transition duration-200 shadow-inner">
+                      <i className="fas fa-tags text-xs"></i>
                     </div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
-                      অর্ডার (Orders)
-                    </span>
-                  </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" title="System Active"></span>
-                </div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <h2 className="text-2xl font-black text-white tracking-tight drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
-                    {userTotalOrders}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveTab('orders');
-                    haptic('light');
-                  }}
-                  className="mt-2.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-slate-800/90 to-slate-900/95 hover:from-slate-750 hover:to-slate-850 border border-indigo-500/35 hover:border-indigo-400 text-slate-100 text-[11px] font-black uppercase tracking-wider shadow-[0_4px_15px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.25)] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <i className="fas fa-list-check text-indigo-400 text-xs"></i>
-                  <span>অর্ডার হিস্টোরি</span>
-                </button>
-              </div>
-            </div>
+                    <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">সার্ভিস রেট</span>
+                  </button>
 
-            {/* LIVE ANNOUNCEMENT TICKER (controlled by admin) */}
-            {welcomeConfig.showNoticeTicker !== false && (
-              <div
-                onClick={() => {
-                  setShowAnnouncementModal(true);
-                  haptic('light');
-                }}
-                className="mt-3 relative z-10 overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-900/95 border border-amber-500/40 hover:border-amber-400 p-2.5 flex items-center gap-2.5 shadow-lg backdrop-blur-md cursor-pointer transition active:scale-[0.99] group"
-                title="সম্পূর্ণ নোটিশ দেখতে ক্লিক করুন"
-              >
-                <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 text-amber-300 text-[10px] font-black px-2.5 py-1 rounded-xl border border-amber-500/40 whitespace-nowrap shadow-sm group-hover:bg-amber-500/35 transition">
-                  <i className="fas fa-bullhorn text-amber-400 text-xs animate-bounce"></i>
-                  <span>নোটিশ</span>
+                  {/* 24/7 Support */}
+                  <a
+                    href="https://wa.me/8801828779117"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => haptic('light')}
+                    className="p-3 rounded-2xl bg-gradient-to-b from-emerald-950/50 via-slate-900/80 to-slate-950/90 border border-emerald-500/35 hover:border-emerald-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(16,185,129,0.18)] hover:shadow-[0_6px_22px_rgba(16,185,129,0.35)]"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition duration-200 shadow-inner">
+                      <i className="fab fa-whatsapp text-sm"></i>
+                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">হোয়াটসঅ্যাপ</span>
+                  </a>
                 </div>
-                <div className="overflow-hidden whitespace-nowrap w-full">
-                  <p className="text-[11px] font-semibold text-slate-200 inline-block animate-marquee">
-                    {welcomeConfig.noticeText || '⚡ ২৪/৭ ইনস্ট্যান্ট সার্ভিস সক্রিয় | বিকাশ, নগদ, রকেটে ইনস্ট্যান্ট ডিপোজিট বোনাস চলছে | যেকোনো প্রয়োজনে আমাদের লাইভ সাপোর্টে যোগাযোগ করুন 🚀'}
-                  </p>
-                </div>
-                <div className="text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/30 whitespace-nowrap group-hover:text-white transition flex items-center gap-1">
-                  <span>দেখুন</span>
-                  <i className="fas fa-arrow-right text-[8px]"></i>
-                </div>
-              </div>
+              </>
             )}
-
-            {/* USER QUICK 4-GRID ACTION BAR */}
-            <div className="grid grid-cols-4 gap-2.5 mt-3 relative z-10">
-              {/* Live Orders */}
-              <button
-                onClick={() => {
-                  setShowLiveOrdersModal(true);
-                  haptic('heavy');
-                }}
-                className="p-3 rounded-2xl bg-gradient-to-b from-red-950/50 via-slate-900/80 to-slate-950/90 border border-red-500/35 hover:border-red-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(239,68,68,0.18)] hover:shadow-[0_6px_22px_rgba(239,68,68,0.35)]"
-              >
-                <div className="w-8 h-8 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 relative group-hover:scale-110 transition duration-200 shadow-inner">
-                  <i className="fas fa-satellite-dish text-xs animate-pulse"></i>
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
-                </div>
-                <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">লাইভ অর্ডার</span>
-              </button>
-
-              {/* Daily Tasks */}
-              <button
-                onClick={() => {
-                  setShowTasksModal(true);
-                  haptic('heavy');
-                }}
-                className="p-3 rounded-2xl bg-gradient-to-b from-amber-950/50 via-slate-900/80 to-slate-950/90 border border-amber-500/35 hover:border-amber-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(245,158,11,0.18)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.35)]"
-              >
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 group-hover:scale-110 transition duration-200 shadow-inner">
-                  <i className="fas fa-gift text-xs"></i>
-                </div>
-                <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">টাস্ক বোনাস</span>
-              </button>
-
-              {/* Price / Services */}
-              <button
-                onClick={() => {
-                  setShowSearchModal(true);
-                  haptic('light');
-                }}
-                className="p-3 rounded-2xl bg-gradient-to-b from-cyan-950/50 via-slate-900/80 to-slate-950/90 border border-cyan-500/35 hover:border-cyan-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(56,189,248,0.18)] hover:shadow-[0_6px_22px_rgba(56,189,248,0.35)]"
-              >
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 group-hover:scale-110 transition duration-200 shadow-inner">
-                  <i className="fas fa-tags text-xs"></i>
-                </div>
-                <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">সার্ভিস রেট</span>
-              </button>
-
-              {/* 24/7 Support */}
-              <a
-                href="https://wa.me/8801828779117"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => haptic('light')}
-                className="p-3 rounded-2xl bg-gradient-to-b from-emerald-950/50 via-slate-900/80 to-slate-950/90 border border-emerald-500/35 hover:border-emerald-400/80 transition-all duration-200 active:scale-90 flex flex-col items-center justify-center gap-1.5 text-center group cursor-pointer shadow-[0_4px_18px_rgba(16,185,129,0.18)] hover:shadow-[0_6px_22px_rgba(16,185,129,0.35)]"
-              >
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition duration-200 shadow-inner">
-                  <i className="fab fa-whatsapp text-sm"></i>
-                </div>
-                <span className="text-[10px] font-extrabold text-slate-200 group-hover:text-white tracking-tight">হোয়াটসঅ্যাপ</span>
-              </a>
-            </div>
           </header>
 
           {/* HOME TAB */}
@@ -6179,7 +6305,7 @@ export default function App() {
                         <div className="flex gap-2">
                           <input
                             type="text"
-                            placeholder="কারো রেফারেল থাকলে ইউজারনেম লিখুন (যেমন: rashal117)"
+                            placeholder="কারো রেফারেল থাকলে ইনভাইটার ইউজারনেম লিখুন"
                             className="input-modern text-xs py-2 px-3 flex-1 font-mono text-amber-300 placeholder:text-slate-500"
                             value={depositReferralCode}
                             onChange={(e) => setDepositReferralCode(e.target.value)}
@@ -13168,96 +13294,121 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Telegram Bot Referral Link Box */}
-                <div className="bg-gradient-to-r from-sky-950/80 via-slate-900 to-blue-950/80 border border-sky-500/40 p-3.5 rounded-2xl space-y-2.5 shadow-[0_4px_20px_rgba(14,165,233,0.15)] relative overflow-hidden">
+                {/* Telegram Mini App Direct Referral Link Box */}
+                <div className="bg-gradient-to-r from-sky-950/90 via-slate-900 to-cyan-950/90 border border-sky-400/50 p-3.5 rounded-2xl space-y-2.5 shadow-[0_4px_24px_rgba(14,165,233,0.2)] relative overflow-hidden">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
                       <i className="fab fa-telegram text-sky-400 text-sm"></i>
-                      <span>টেলিগ্রাম বট রেফারেল লিংক (Telegram Bot)</span>
+                      <span>টেলিগ্রাম মিনি অ্যাপ লিংক (অটো লগইন ও রেফারেল)</span>
                     </label>
-                    <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                      <i className="fas fa-robot text-[9px]"></i>
-                      <span>Bot Link</span>
+                    <span className="text-[9px] bg-gradient-to-r from-sky-500/30 to-blue-500/30 text-sky-300 border border-sky-400/40 px-2 py-0.5 rounded-full font-extrabold flex items-center gap-1 shadow-sm">
+                      <i className="fas fa-bolt text-[9px] text-amber-300"></i>
+                      <span>Direct Mini App</span>
                     </span>
                   </div>
                   
-                  <div className="flex items-center gap-2 bg-black/60 border border-sky-500/30 rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-2 bg-black/60 border border-sky-400/30 rounded-xl px-3 py-2">
                     <input
                       type="text"
                       readOnly
-                      value={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`}
+                      value={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}/app?startapp=${currentUser?.username || ''}`}
                       className="bg-transparent text-[11px] font-mono text-sky-200 outline-none w-full select-all"
                     />
                     <button
                       onClick={() => {
                         const botUsername = (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim();
-                        const botLink = `https://t.me/${botUsername}?start=ref_${currentUser?.username || ''}`;
-                        navigator.clipboard.writeText(botLink);
-                        showToast('✅ টেলিগ্রাম বট রেফারেল লিংক কপি করা হয়েছে!', 'success');
+                        const appLink = `https://t.me/${botUsername}/app?startapp=${currentUser?.username || ''}`;
+                        navigator.clipboard.writeText(appLink);
+                        showToast('✅ মিনি অ্যাপ রেফারেল লিংক কপি করা হয়েছে! (এক ক্লিকে অটো লগইন হবে)', 'success');
                         haptic('success');
                       }}
-                      className="px-3 py-1 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-black rounded-lg shadow whitespace-nowrap active:scale-95 transition cursor-pointer"
+                      className="px-3 py-1 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-black rounded-lg shadow whitespace-nowrap active:scale-95 transition cursor-pointer"
                     >
                       <i className="fas fa-copy mr-1"></i> Copy
                     </button>
                     <a
-                      href={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`}
+                      href={`https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}/app?startapp=${currentUser?.username || ''}`}
                       target="_blank"
                       rel="noreferrer"
                       className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-sky-300 text-xs font-bold rounded-lg border border-sky-400/30 whitespace-nowrap active:scale-95 transition flex items-center gap-1 cursor-pointer"
-                      title="বট ওপেন করুন"
+                      title="মিনি অ্যাপ ওপেন করুন"
                     >
                       <i className="fas fa-external-link-alt text-[10px]"></i> Open
                     </a>
                   </div>
 
-                  {/* Telegram Channel / Official Link */}
-                  <div className="flex flex-wrap items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs gap-2">
-                    <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
-                      <i className="fas fa-bullhorn text-sky-400 text-xs"></i>
-                      <span>অফিসিয়াল টেলিগ্রাম:</span>
-                      <span className="text-sky-300 font-mono font-bold truncate max-w-[140px] sm:max-w-[200px]">
-                        {referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                  <p className="text-[10px] text-sky-200/90 leading-relaxed bg-sky-950/40 p-2 rounded-lg border border-sky-500/20">
+                    ⚡ <strong>সরাসরি অটো লগইন:</strong> এই লিংকে ক্লিক করলে কোনো একাউন্ট বা পাসওয়ার্ড বানাতে হবে না, সরাসরি টেলিগ্রাম মিনি অ্যাপ খুলে অটো লগইন হয়ে যাবে এবং আপনার রেফারেলে যুক্ত হবে!
+                  </p>
+
+                  {/* Telegram Bot Link & Channel Links */}
+                  <div className="pt-1 space-y-2">
+                    <div className="flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                        <i className="fas fa-robot text-sky-400 text-xs"></i>
+                        <span>বট স্টার্ট লিংক:</span>
+                        <span className="text-sky-300 font-mono font-bold truncate max-w-[130px] sm:max-w-[180px]">
+                          t.me/{(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start={currentUser?.username || ''}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
-                          const channelUrl = referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM';
-                          navigator.clipboard.writeText(channelUrl);
-                          showToast('✅ টেলিগ্রাম লিংক কপি করা হয়েছে!', 'success');
+                          const botUsername = (referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim();
+                          const botLink = `https://t.me/${botUsername}?start=${currentUser?.username || ''}`;
+                          navigator.clipboard.writeText(botLink);
+                          showToast('✅ টেলিগ্রাম বট লিংক কপি করা হয়েছে!', 'success');
                           haptic('success');
                         }}
                         className="text-sky-300 hover:text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                       >
                         <i className="fas fa-copy"></i> কপি
                       </button>
-                      <a
-                        href={referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-amber-400 hover:text-amber-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <i className="fas fa-paper-plane"></i> জয়েন
-                      </a>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs gap-2">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-[11px]">
+                        <i className="fas fa-bullhorn text-sky-400 text-xs"></i>
+                        <span>অফিসিয়াল টেলিগ্রাম:</span>
+                        <span className="text-sky-300 font-mono font-bold truncate max-w-[140px] sm:max-w-[200px]">
+                          {referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const channelUrl = referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM';
+                            navigator.clipboard.writeText(channelUrl);
+                            showToast('✅ টেলিগ্রাম লিংক কপি করা হয়েছে!', 'success');
+                            haptic('success');
+                          }}
+                          className="text-sky-300 hover:text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <i className="fas fa-copy"></i> কপি
+                        </button>
+                        <a
+                          href={referralConfig.telegramChannelUrl || 'https://t.me/RF2_SMM'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-amber-400 hover:text-amber-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <i className="fas fa-paper-plane"></i> জয়েন
+                        </a>
+                      </div>
                     </div>
                   </div>
-
-                  <p className="text-[10px] text-sky-200/80 leading-relaxed">
-                    💡 বন্ধুরা আপনার এই টেলিগ্রাম বট লিংকে ক্লিক করে বটে <strong className="text-white font-mono">/start</strong> দিলেই আপনার রেফারেল হিসেবে রেজিস্টার হবে।
-                  </p>
                 </div>
 
                 {/* Social Share Buttons */}
                 <div className="grid grid-cols-2 gap-2">
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `🔥 RF SMM PANEL - বাংলাদেশের সেরা ও বিশ্বস্ত সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্ম!\nলাইক, ফলোয়ার, ওয়াচটাইম নিন মাত্র কয়েক টাকায়।\n🎁 ওয়েবসাইট দিয়ে যোগ দিন:\n${
+                      `🔥 RF SMM PANEL - বাংলাদেশের সেরা ও বিশ্বস্ত সোশ্যাল মিডিয়া মার্কেটিং প্ল্যাটফর্ম!\nলাইক, ফলোয়ার, ওয়াচটাইম নিন মাত্র কয়েক টাকায়।\n⚡ টেলিগ্রাম দিয়ে এক ক্লিকে অটো লগইন করুন:\nhttps://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}/app?startapp=${currentUser?.username || ''}\n🎁 ওয়েবসাইট দিয়ে যোগ দিন:\n${
                         referralConfig.websiteUrl
                           ? `${referralConfig.websiteUrl.replace(/\/+$/, '')}/?ref=${currentUser?.username || ''}`
                           : `${window.location.origin}/?ref=${currentUser?.username || ''}`
-                      }\n🤖 টেলিগ্রাম বট দিয়ে যোগ দিন:\nhttps://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`
+                      }`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -13269,8 +13420,8 @@ export default function App() {
 
                   <a
                     href={`https://t.me/share/url?url=${encodeURIComponent(
-                      `https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}?start=ref_${currentUser?.username || ''}`
-                    )}&text=${encodeURIComponent('🔥 RF SMM PANEL - বাংলাদেশের সেরা SMM প্ল্যাটফর্ম ও টেলিগ্রাম বট! এখনই একাউন্ট খুলুন ও ৫% বোনাস নিন')}`}
+                      `https://t.me/${(referralConfig.telegramBotUsername || 'RF2_SMM_bot').replace(/^@/, '').trim()}/app?startapp=${currentUser?.username || ''}`
+                    )}&text=${encodeURIComponent('🔥 RF SMM PANEL - বাংলাদেশের সেরা SMM প্ল্যাটফর্ম ও টেলিগ্রাম মিনি অ্যাপ! এক ক্লিকেই অটো লগইন ও সার্ভিস শুরু করুন')}`}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#229ED9]/20 hover:bg-[#229ED9]/30 border border-[#229ED9]/40 rounded-xl text-[#229ED9] text-xs font-bold transition active:scale-95"
@@ -13510,14 +13661,14 @@ export default function App() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
-                      <span>Admin PIN / Password</span>
-                      <span className="text-[10px] text-amber-400 font-mono">মাস্টার পিন বা পাসওয়ার্ড</span>
+                      <span>Admin Password</span>
+                      <span className="text-[10px] text-amber-400 font-mono">সিকিউরিটি ভেরিফিকেশন</span>
                     </label>
                     <div className="relative">
                       <input
                         type={showAdminPinPassword ? "text" : "password"}
                         className="auth-input pl-10 pr-10 text-center tracking-widest font-mono text-base font-black bg-slate-900/90 border-amber-500/40 focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-                        placeholder="এডমিন পিন লিখুন (যেমন: 123456)"
+                        placeholder="এডমিন সিকিউরিটি পাসওয়ার্ড দিন"
                         value={adminPinInput}
                         onChange={(e) => {
                           setAdminPinInput(e.target.value);
@@ -13543,18 +13694,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Quick Helper Button for Master PIN */}
-                  <div className="flex items-center justify-between text-[11px] px-1 text-slate-400">
-                    <span>কুইক পিন সাজেশন:</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdminPinInput('123456')}
-                      className="text-amber-400 hover:text-amber-300 font-mono font-bold underline cursor-pointer"
-                    >
-                      123456
-                    </button>
-                  </div>
-
                   {/* Submit Button */}
                   <button
                     type="button"
@@ -13562,24 +13701,7 @@ export default function App() {
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm shadow-[0_0_20px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
                   >
                     <i className="fas fa-unlock text-xs"></i>
-                    <span>এডমিন প্যানেল আনলক করুন ⚡</span>
-                  </button>
-
-                  <div className="relative my-2">
-                    <div className="h-[1px] bg-white/10 w-full" />
-                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0b1329] px-2 text-[10px] text-slate-400 uppercase font-mono">
-                      অথবা সরাসরি
-                    </span>
-                  </div>
-
-                  {/* Direct One Tap Farju Admin Login */}
-                  <button
-                    type="button"
-                    onClick={handleDirectAdminLogin}
-                    className="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
-                  >
-                    <i className="fas fa-user-shield text-xs text-amber-400"></i>
-                    <span>Farju Admin (rashal117) দিয়ে সরাসরি প্রবেশ 👑</span>
+                    <span>এডমিন প্যানেলে প্রবেশ করুন ⚡</span>
                   </button>
                 </div>
               </div>
